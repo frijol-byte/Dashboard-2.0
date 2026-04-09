@@ -1,0 +1,23 @@
+stages:
+  - build
+  - deploy
+
+build-database:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - python scripts/build_db.py
+  artifacts:
+    paths:
+      - public/
+
+pages:
+  stage: deploy
+  script:
+    - echo "Deploying toolkit + database to GitLab Pages"
+  artifacts:
+    paths:
+      - public
+  needs: [build-database]
+  only:
+    - main

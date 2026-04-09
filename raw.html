@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plate Reader Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;--surface3:#EBE9E4;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#1B6B4A;--accent-light:#E8F5EE;--accent-dark:#0F4A32;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text2);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light);box-shadow:0 4px 12px rgba(27,107,74,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.hero{text-align:center;padding:3rem 0 2.5rem;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:320px;height:320px;background:radial-gradient(circle,rgba(27,107,74,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent-light);color:var(--accent-dark);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:1.25rem;position:relative;z-index:1}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:2.1rem;font-weight:600;letter-spacing:-.03em;line-height:1.15;margin-bottom:.6rem;position:relative;z-index:1}
+.hero p{font-size:1rem;color:var(--text2);max-width:540px;margin:0 auto;line-height:1.55;position:relative;z-index:1}
+
+.plate-grid{display:grid;grid-template-columns:repeat(24,1fr);gap:3px;max-width:480px;margin:1.5rem auto 0;opacity:.25;position:relative;z-index:1}
+.plate-grid .well-dot{width:100%;aspect-ratio:1;border-radius:50%;background:var(--accent)}
+
+.uploads{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:1.5rem 0 2rem}
+@media(max-width:600px){.uploads{grid-template-columns:1fr}}
+.upload-card{position:relative;border:2px dashed var(--border);border-radius:var(--radius-lg);padding:2rem 1.5rem;text-align:center;cursor:pointer;transition:all .25s;background:var(--surface)}
+.upload-card:hover{border-color:var(--border2);background:var(--surface2)}
+.upload-card.loaded{border:2px solid var(--accent);cursor:default;background:var(--accent-light)}
+.upload-card.loaded:hover{background:var(--accent-light)}
+.upload-icon{width:48px;height:48px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface2);margin-bottom:.75rem;transition:all .25s}
+.upload-card.loaded .upload-icon{background:var(--accent);color:#fff}
+.upload-card .label{font-weight:600;font-size:1rem;margin-bottom:4px}
+.upload-card .desc{font-size:.8rem;color:var(--text3);line-height:1.4}
+.upload-card.loaded .label{color:var(--accent-dark)}
+.upload-card.loaded .desc{color:var(--accent)}
+.upload-card input[type=file]{display:none}
+
+.clear-btn{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.06);color:var(--text2);font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;transition:all .2s;z-index:2;line-height:1}
+.clear-btn:hover{background:var(--danger-light);color:var(--danger)}
+.upload-card.loaded .clear-btn{display:inline-flex}
+
+.info-bar{background:var(--surface2);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.5rem;font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.info-bar .tag{font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--accent-dark);background:var(--accent-light);padding:2px 8px;border-radius:6px;font-size:.78rem}
+
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.75rem}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem}
+.stat-card .stat-label{font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:2px}
+.stat-card .stat-value{font-size:1.25rem;font-weight:600;font-family:'JetBrains Mono',monospace;letter-spacing:-.02em}
+.stat-card.accent{border-color:var(--accent);background:var(--accent-light)}
+.stat-card.accent .stat-value{color:var(--accent-dark)}
+
+.tabs{display:flex;gap:2px;border-bottom:1.5px solid var(--border);margin-bottom:1.5rem;overflow-x:auto}
+.tab-btn{padding:10px 18px;font-size:.85rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text3);white-space:nowrap;border-bottom:2.5px solid transparent;transition:all .2s;font-family:inherit}
+.tab-btn:hover{color:var(--text2)}
+.tab-btn.active{color:var(--accent-dark);border-bottom-color:var(--accent)}
+
+.chart-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.chart-title{font-size:.9rem;font-weight:600}
+.chart-subtitle{font-size:.78rem;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.chart-container{position:relative;width:100%;height:380px}
+
+.dl-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text2);font-size:.78rem;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
+.dl-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+.dl-btn svg{width:14px;height:14px}
+
+.data-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.data-table th{text-align:right;padding:8px 10px;font-weight:600;color:var(--text3);border-bottom:1.5px solid var(--border);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.data-table th:first-child{text-align:left}
+.data-table td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--surface2);font-family:'JetBrains Mono',monospace;font-size:.78rem}
+.data-table td:first-child{text-align:left;font-family:'DM Sans',sans-serif;font-weight:500;font-size:.82rem}
+.data-table tr:hover td{background:var(--surface2)}
+.data-table .hl{color:var(--accent-dark);font-weight:600}
+
+.export-panel{border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1.5rem}
+.export-panel h3{font-size:.95rem;font-weight:600;margin-bottom:.75rem}
+.export-row{display:flex;flex-wrap:wrap;gap:10px}
+
+.db-panel{border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-top:1rem}
+.db-panel h3{font-size:.95rem;font-weight:600;margin-bottom:.5rem;display:flex;align-items:center;gap:8px}
+.db-panel h3 svg{width:18px;height:18px;color:var(--accent)}
+.db-panel .db-desc{font-size:.8rem;color:var(--text2);margin-bottom:1rem;line-height:1.5}
+.db-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 20px;border-radius:var(--radius);border:1.5px solid var(--accent);
+  background:var(--accent);color:#fff;font-size:.82rem;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .2s;
+}
+.db-btn:hover{background:var(--accent-dark)}
+.db-btn:disabled{opacity:.4;cursor:default;background:var(--text3);border-color:var(--text3)}
+.db-btn svg{width:16px;height:16px}
+.db-status{margin-top:.75rem;font-size:.8rem;padding:.6rem 1rem;border-radius:var(--radius);display:none}
+.db-status.ok{display:block;background:var(--accent-light);color:var(--accent-dark);border:1px solid #A7F3D0}
+.db-status.err{display:block;background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.db-status.info{display:block;background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+.col-diff{margin-top:.5rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.6}
+.col-diff .miss{color:var(--danger);font-weight:500}
+.col-diff .extra{color:#6D28D9;font-weight:500}
+
+.gl-settings{margin-top:.75rem}
+.gl-row{display:flex;gap:10px}
+.gl-row .gl-field:first-child{flex:2}
+.gl-row .gl-field:last-child{flex:1}
+.gl-field{display:flex;flex-direction:column;gap:3px}
+.gl-field label{font-size:.7rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.gl-hint{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:.68rem}
+.gl-field input{
+  padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-size:.8rem;
+  background:var(--surface);color:var(--text);transition:border-color .2s;
+}
+.gl-field input:focus{outline:none;border-color:var(--accent)}
+.gl-field input::placeholder{color:var(--text3);font-weight:400}
+
+.error-box{background:var(--danger-light);color:var(--danger);padding:1rem 1.25rem;border-radius:var(--radius);font-size:.9rem;margin-bottom:1.5rem;border:1px solid rgba(181,52,46,.15)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.75rem;color:var(--text2);margin-top:10px;justify-content:center}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend .sw{width:10px;height:10px;border-radius:2px}
+
+.fade-in{animation:fadeUp .5s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stagger-1{animation-delay:.05s}.stagger-2{animation-delay:.1s}.stagger-3{animation-delay:.15s}
+#analysis{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <a class="home-btn" href="index.html">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+    Toolkit home
+  </a>
+  <div class="hero fade-in">
+    <div class="hero-badge"><span class="dot"></span> Quantification pipeline</div>
+    <h1>Plate reader analysis</h1>
+    <p>Upload your plate reader Excel results and plate layout CSV to run standard curve regression, quantify all samples, remove outliers, and export everything.</p>
+    <div class="plate-grid" id="plateGrid"></div>
+  </div>
+
+  <div class="uploads fade-in stagger-1">
+    <div class="upload-card" id="uploadResults" onclick="document.getElementById('fileResults').click()">
+      <button class="clear-btn" id="clearResults" title="Remove file">&times;</button>
+      <input type="file" id="fileResults" accept=".xlsx,.xls,.csv">
+      <div class="upload-icon" id="iconResults"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <div class="label" id="labelResults">Results file</div>
+      <div class="desc" id="descResults">Excel (.xlsx) or CSV with plate reader output</div>
+    </div>
+    <div class="upload-card" id="uploadLayout" onclick="document.getElementById('fileLayout').click()">
+      <button class="clear-btn" id="clearLayout" title="Remove file">&times;</button>
+      <input type="file" id="fileLayout" accept=".csv">
+      <div class="upload-icon" id="iconLayout"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+      <div class="label" id="labelLayout">Plate layout CSV</div>
+      <div class="desc" id="descLayout">well, key, concentration, dilution</div>
+    </div>
+  </div>
+
+  <div id="infoBar" class="info-bar fade-in stagger-2" style="display:none"></div>
+  <div class="error-box" id="errorBox" style="display:none"></div>
+
+  <div id="analysis">
+    <div class="stats-row fade-in" id="statsRow"></div>
+    <div class="tabs fade-in stagger-1" id="tabsRow"></div>
+    <div id="panelCurve" class="chart-panel fade-in stagger-2"></div>
+    <div id="panelBox" class="chart-panel" style="display:none"></div>
+    <div id="panelScatter" class="chart-panel" style="display:none"></div>
+    <div id="panelClean" class="chart-panel" style="display:none"></div>
+    <div id="panelTable" class="chart-panel" style="display:none"></div>
+    <div class="export-panel fade-in stagger-3" id="exportPanel"></div>
+    <div class="db-panel fade-in stagger-3" id="dbPanel" style="display:none">
+      <h3>
+        <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="9" ry="3.5"/><path d="M3 6v5.5C3 13.43 7.03 15 12 15s9-1.57 9-3.5V6"/><path d="M3 11.5V17c0 1.93 4.03 3.5 9 3.5s9-1.57 9-3.5v-5.5"/></svg>
+        Push to database
+      </h3>
+      <p class="db-desc">Validates columns match the <code>results</code> table, then commits a CSV directly to <code>data/results/</code> in your GitLab repo. The pipeline rebuilds the database automatically.</p>
+
+      <div id="glSettings" class="gl-settings">
+        <div class="gl-row">
+          <div class="gl-field">
+            <label>Git Project ID (Copy below): 81128470</label>
+            <input type="text" id="glProject" placeholder="e.g. 12345678 or user/repo" spellcheck="false">
+          </div>
+          <div class="gl-field">
+            <label>Branch</label>
+            <input type="text" id="glBranch" value="main" spellcheck="false">
+          </div>
+        </div>
+        <div class="gl-field" style="margin-top:6px">
+          <label>Personal access token (copy below): glpat-0OhHblJkGJLryyfDHB6V4GM6MQpvOjEKdTpjMnkyaA8.01.17003ko8n <span class="gl-hint">(api scope — stored in your browser only)</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="glToken" placeholder="glpat-xxxxxxxxxxxx" spellcheck="false" style="flex:1">
+            <button class="dl-btn" onclick="toggleTokenVis()" id="toggleTok" style="font-size:.7rem">Show</button>
+            <button class="dl-btn" onclick="clearGLSettings()" style="font-size:.7rem;color:var(--danger);border-color:var(--danger)">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:1rem;align-items:center;flex-wrap:wrap">
+        <button class="db-btn" id="dbBtn" onclick="pushToDB()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          Validate &amp; push
+        </button>
+        <button class="dl-btn" onclick="pushToDB(true)" style="font-size:.78rem">Download CSV only</button>
+      </div>
+      <div class="db-status" id="dbStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS=['#534AB7','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA7517','#B5342E','#888780','#3C3489','#0F6E56','#993C1D','#993556','#185FA5','#3B6D11','#854F0B','#A32D2D'];
+let rawWells=null,layoutData=null,results=null,rawFileName=null,infoTexts={results:'',layout:''};
+const charts={};
+
+(function(){const g=document.getElementById('plateGrid');for(let i=0;i<384;i++){const d=document.createElement('div');d.className='well-dot';d.style.animationDelay=(Math.random()*.8)+'s';d.style.opacity=(.08+Math.random()*.18);g.appendChild(d);}})();
+
+/* ── EXCEL PARSING (mirrors Jupyter logic) ── */
+function parseExcelResults(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:'array'});
+  const sheetName=wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  let anchorRow=-1;
+  for(let i=0;i<raw.length;i++){
+    if(raw[i]&&raw[i][0]&&String(raw[i][0]).includes('Results')){anchorRow=i;break;}
+  }
+  if(anchorRow<0) throw new Error('Could not find "Results" section in the Excel file.');
+
+  let headerRow=-1,firstDataCol=-1,headerVals=null;
+  for(let i=anchorRow+1;i<Math.min(anchorRow+20,raw.length);i++){
+    const row=raw[i];if(!row)continue;
+    for(let j=0;j<row.length;j++){
+      if(row[j]===1||row[j]===1.0){
+        if(j+1<row.length&&(row[j+1]===2||row[j+1]===2.0)){
+          headerRow=i;firstDataCol=j;headerVals=row;break;
+        }
+      }
+    }
+    if(headerRow>=0)break;
+  }
+  if(headerRow<0) throw new Error('Could not find column header row (1, 2, 3...) in Excel.');
+
+  const letterCol=firstDataCol-1;
+  const stacked=[];
+  for(let i=headerRow+1;i<raw.length;i++){
+    const row=raw[i];if(!row)break;
+    const letter=row[letterCol];
+    if(!letter||typeof letter!=='string'||letter.length>2)break;
+    for(let j=0;j<24;j++){
+      const ci=firstDataCol+j;
+      if(ci>=row.length)break;
+      const val=row[ci];if(val==null)continue;
+      const colNum=headerVals[ci];
+      const meas=parseFloat(val);
+      if(!isNaN(meas)) stacked.push({well:letter+colNum,measurement:meas});
+    }
+  }
+  return{wells:stacked,sheet:sheetName};
+}
+
+/* ── FILE HANDLERS ── */
+document.getElementById('fileResults').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  const ext=f.name.split('.').pop().toLowerCase();
+
+  if(ext==='csv'){
+    Papa.parse(f,{header:true,skipEmptyLines:true,complete:function(r){
+      const keys=Object.keys(r.data[0]);
+      const wc=keys.find(k=>/well/i.test(k));
+      const mc=keys.find(k=>/measurement|fluorescence|absorbance|rfu|rlu|od|signal/i.test(k));
+      if(!wc||!mc){showError('CSV must have "Well" and "Measurement" columns.');return;}
+      rawWells=r.data.map(row=>({well:row[wc],measurement:parseFloat(row[mc])})).filter(r=>!isNaN(r.measurement));
+      rawFileName=f.name;
+      markLoaded('Results',f.name);
+      infoTexts.results='Parsed <span class="tag">'+rawWells.length+' wells</span> from CSV';
+      updateInfo();tryAutoRun();
+    }});
+  } else {
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const res=parseExcelResults(ev.target.result);
+        rawWells=res.wells;
+        rawFileName=f.name;
+        markLoaded('Results',f.name);
+        infoTexts.results='Parsed <span class="tag">'+rawWells.length+' wells</span> from sheet "'+res.sheet+'"';
+        updateInfo();tryAutoRun();
+      }catch(err){showError(err.message);}
+    };
+    reader.readAsArrayBuffer(f);
+  }
+});
+
+document.getElementById('fileLayout').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  Papa.parse(f,{header:true,skipEmptyLines:true,complete:function(r){
+    layoutData=r.data;
+    markLoaded('Layout',f.name);
+    const lk=Object.keys(r.data[0]);
+    const lKey=lk.find(k=>/^key$/i.test(k))||lk.find(k=>/sample|name/i.test(k));
+    const uniqueKeys=lKey?[...new Set(r.data.map(d=>d[lKey]).filter(Boolean))]:[];
+    const stdCount=uniqueKeys.filter(k=>k.toLowerCase().startsWith('standard')).length;
+    infoTexts.layout='Layout: <span class="tag">'+r.data.length+' wells</span> <span class="tag">'+stdCount+' standard levels</span> <span class="tag">'+(uniqueKeys.length-stdCount)+' sample groups</span>';
+    updateInfo();tryAutoRun();
+  }});
+});
+
+document.getElementById('clearResults').addEventListener('click',function(e){
+  e.stopPropagation();rawWells=null;rawFileName=null;document.getElementById('fileResults').value='';
+  resetCard('Results','Results file','Excel (.xlsx) or CSV with plate reader output');
+  infoTexts.results='';updateInfo();hideAnalysis();
+});
+document.getElementById('clearLayout').addEventListener('click',function(e){
+  e.stopPropagation();layoutData=null;document.getElementById('fileLayout').value='';
+  resetCard('Layout','Plate layout CSV','well, key, concentration, dilution');
+  infoTexts.layout='';updateInfo();hideAnalysis();
+});
+
+function markLoaded(w,name){
+  const card=document.getElementById('upload'+w);card.classList.add('loaded');card.onclick=null;
+  document.getElementById('label'+w).textContent=name;
+  document.getElementById('desc'+w).textContent='File loaded';
+  document.getElementById('icon'+w).innerHTML='<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+}
+function resetCard(w,label,desc){
+  const card=document.getElementById('upload'+w);card.classList.remove('loaded');
+  card.onclick=function(){document.getElementById('file'+w).click()};
+  document.getElementById('label'+w).textContent=label;
+  document.getElementById('desc'+w).textContent=desc;
+  const svgs={Results:'<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',Layout:'<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'};
+  document.getElementById('icon'+w).innerHTML=svgs[w];
+}
+function updateInfo(){
+  const parts=[infoTexts.results,infoTexts.layout].filter(Boolean);
+  const bar=document.getElementById('infoBar');
+  if(!parts.length){bar.style.display='none';return;}
+  bar.innerHTML=parts.join(' &nbsp;&middot;&nbsp; ');bar.style.display='flex';
+}
+function showError(msg){document.getElementById('errorBox').textContent=msg;document.getElementById('errorBox').style.display='block';document.getElementById('analysis').style.display='none';}
+function hideAnalysis(){document.getElementById('analysis').style.display='none';document.getElementById('errorBox').style.display='none';document.getElementById('dbPanel').style.display='none';}
+function tryAutoRun(){if(rawWells&&layoutData)runAnalysis();}
+
+/* ── LINEAR REGRESSION ── */
+function linReg(xs,ys){
+  const n=xs.length;let sx=0,sy=0,sxy=0,sxx=0;
+  for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];sxy+=xs[i]*ys[i];sxx+=xs[i]*xs[i];}
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx),intercept=(sy-slope*sx)/n;
+  let ssTot=0,ssRes=0;const ym=sy/n;
+  for(let i=0;i<n;i++){ssTot+=(ys[i]-ym)**2;ssRes+=(ys[i]-(slope*xs[i]+intercept))**2;}
+  return{slope,intercept,r2:ssTot===0?0:1-ssRes/ssTot};
+}
+
+/* ── MAIN ANALYSIS ── */
+function runAnalysis(){
+  document.getElementById('errorBox').style.display='none';
+  const lk=Object.keys(layoutData[0]);
+  const lWell=lk.find(k=>/^well$/i.test(k));
+  const lKey=lk.find(k=>/^key$/i.test(k))||lk.find(k=>/sample|name|id/i.test(k));
+  const lConc=lk.find(k=>/concentration|conc/i.test(k));
+  const lDil=lk.find(k=>/dilution|dil/i.test(k));
+  if(!lWell||!lKey)return showError('Plate layout must have "well" and "key" columns.');
+
+  const layoutMap={};
+  const layoutColNames=lk.map(k=>k.toLowerCase().replace(/\s+/g,'_'));
+  layoutData.forEach(r=>{
+    const fullRow={};
+    lk.forEach((k,i)=>{fullRow[layoutColNames[i]]=r[k];});
+    fullRow._key=r[lKey]||'';
+    fullRow._conc=parseFloat(r[lConc])||0;
+    fullRow._dil=parseFloat(r[lDil])||1;
+    layoutMap[r[lWell]]=fullRow;
+  });
+
+  const merged=[];
+  rawWells.forEach(r=>{
+    const meta=layoutMap[r.well];if(!meta)return;
+    merged.push({...meta,well:r.well,measurement:r.measurement,key:meta._key,concentration:meta._conc,dilution:meta._dil});
+  });
+  if(!merged.length)return showError('No wells matched between results and layout. Check well naming (e.g. A1 vs A01).');
+
+  const stds=merged.filter(r=>r.key.toLowerCase().startsWith('standard')&&!isNaN(r.concentration)&&r.concentration>0);
+  if(stds.length<2)return showError('Need at least 2 standard points with concentration > 0. Found '+stds.length+'.');
+
+  const xs=stds.map(s=>s.measurement),ys=stds.map(s=>s.concentration);
+  const reg=linReg(xs,ys);
+
+  const allResults=merged.map(r=>{
+    const cc=reg.slope*r.measurement+reg.intercept;
+    return{...r,calc_conc:cc,final_conc:Math.max(0,cc*r.dilution)};
+  });
+
+  const samples=allResults.filter(r=>!r.key.toLowerCase().startsWith('standard')&&r.key!=='');
+  const sampleKeys=[...new Set(samples.map(s=>s.key))].sort();
+
+  const stats=sampleKeys.map(k=>{
+    const g=samples.filter(s=>s.key===k).map(s=>s.final_conc).sort((a,b)=>a-b);
+    const n=g.length;if(!n)return null;
+    const mean=g.reduce((a,b)=>a+b,0)/n;
+    const nz=g.filter(v=>v>0);
+    const gm=nz.length?Math.exp(nz.reduce((a,b)=>a+Math.log(b),0)/nz.length):0;
+    const q1=g[Math.floor(n*.25)],med=g[Math.floor(n*.5)],q3=g[Math.floor(n*.75)];
+    const iqr=q3-q1,lo=q1-1.5*iqr,hi=q3+1.5*iqr;
+    const wMin=g.find(v=>v>=lo)??g[0],wMax=[...g].reverse().find(v=>v<=hi)??g[n-1];
+    return{sample:k,min:wMin,q1,median:med,q3,max:wMax,mean,geoMean:gm,iqr,lo,hi,n};
+  }).filter(Boolean);
+
+  const cleanResults=[];
+  allResults.forEach(r=>{
+    if(r.key.toLowerCase().startsWith('standard')||r.key===''){cleanResults.push(r);return;}
+    const s=stats.find(x=>x.sample===r.key);
+    if(s&&r.final_conc>=s.lo&&r.final_conc<=s.hi)cleanResults.push(r);
+  });
+  const cleanSamples=cleanResults.filter(r=>!r.key.toLowerCase().startsWith('standard')&&r.key!=='');
+
+  results={reg,stds,allResults,samples,sampleKeys,stats,cleanResults,cleanSamples,removedCount:samples.length-cleanSamples.length};
+  renderAnalysis();
+}
+
+/* ── RENDER ── */
+let activeTab='curve';
+const tabDefs=[{id:'curve',label:'Standard curve'},{id:'box',label:'Boxplot'},{id:'scatter',label:'All points'},{id:'clean',label:'Outliers removed'},{id:'table',label:'Summary table'}];
+
+function renderAnalysis(){
+  const R=results;
+  document.getElementById('analysis').style.display='block';
+  document.getElementById('statsRow').innerHTML=`
+    <div class="stat-card accent"><div class="stat-label">R&sup2;</div><div class="stat-value">${R.reg.r2.toFixed(6)}</div></div>
+    <div class="stat-card"><div class="stat-label">Slope</div><div class="stat-value">${R.reg.slope.toFixed(6)}</div></div>
+    <div class="stat-card"><div class="stat-label">Intercept</div><div class="stat-value">${R.reg.intercept.toFixed(4)}</div></div>
+    <div class="stat-card"><div class="stat-label">Samples</div><div class="stat-value">${R.sampleKeys.length}</div></div>`;
+  document.getElementById('tabsRow').innerHTML=tabDefs.map(t=>`<button class="tab-btn${t.id===activeTab?' active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+  renderTab();
+}
+function switchTab(id){
+  activeTab=id;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.tab-btn[onclick="switchTab('${id}')"]`)?.classList.add('active');
+  tabDefs.forEach(t=>{const p=document.getElementById('panel'+cap(t.id));if(p)p.style.display=t.id===id?'block':'none';});
+  renderTab();
+}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function dlBtnH(label,oc){return`<button class="dl-btn" onclick="${oc}"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${label}</button>`;}
+
+function renderTab(){
+  const R=results;
+  if(activeTab==='curve')renderCurve(R);
+  else if(activeTab==='box')renderBox(R);
+  else if(activeTab==='scatter')renderScatterTab('panelScatter','scatter_chart',R.samples,R.sampleKeys,'Individual concentrations by sample','scatter_all.png');
+  else if(activeTab==='clean')renderScatterTab('panelClean','clean_chart',R.cleanSamples,R.sampleKeys,'Concentrations — outliers removed ('+R.removedCount+' removed)','scatter_clean.png');
+  else if(activeTab==='table')renderTableTab(R);
+  renderExport();
+}
+
+function renderCurve(R){
+  const p=document.getElementById('panelCurve');
+  p.innerHTML=`<div class="chart-header"><div><div class="chart-title">Standard curve linear regression</div><div class="chart-subtitle">y = ${R.reg.slope.toFixed(6)}x + ${R.reg.intercept.toFixed(4)}&ensp;|&ensp;R&sup2; = ${R.reg.r2.toFixed(6)}</div></div>${dlBtnH('PNG','dlChart("curve_chart","standard_curve.png")')}</div><div class="chart-container"><canvas id="curve_chart"></canvas></div><div class="legend"><span><span class="sw" style="background:#534AB7"></span>Standard points</span><span><span class="sw" style="background:#B5342E"></span>Regression line</span></div>`;
+  if(charts.curve_chart)charts.curve_chart.destroy();
+  const xs=R.stds.map(s=>s.measurement),ys=R.stds.map(s=>s.concentration);
+  const xMin=Math.min(...xs),xMax=Math.max(...xs);
+  charts.curve_chart=new Chart(document.getElementById('curve_chart'),{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Standards',data:R.stds.map(s=>({x:s.measurement,y:s.concentration})),backgroundColor:'#534AB7',pointRadius:5,pointHoverRadius:7},
+      {label:'Fit',data:[{x:xMin,y:R.reg.slope*xMin+R.reg.intercept},{x:xMax,y:R.reg.slope*xMax+R.reg.intercept}],type:'line',borderColor:'#B5342E',borderWidth:2,pointRadius:0,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'('+ctx.parsed.x.toFixed(0)+', '+ctx.parsed.y.toFixed(4)+')'}}},scales:{x:{title:{display:true,text:'Fluorescence (AU)',font:{size:13}},grid:{color:'rgba(0,0,0,.06)'}},y:{title:{display:true,text:'Concentration (mg/L)',font:{size:13}},grid:{color:'rgba(0,0,0,.06)'}}}}
+  });
+}
+
+function renderBox(R){
+  const p=document.getElementById('panelBox');
+  const trows=R.stats.map(s=>`<tr><td>${s.sample}</td><td>${s.n}</td><td>${s.min.toFixed(4)}</td><td>${s.q1.toFixed(4)}</td><td class="hl">${s.median.toFixed(4)}</td><td>${s.q3.toFixed(4)}</td><td>${s.max.toFixed(4)}</td><td>${s.mean.toFixed(4)}</td></tr>`).join('');
+  p.innerHTML=`<div class="chart-header"><div class="chart-title">Distribution by sample</div>${dlBtnH('PNG','dlChart("box_chart","boxplot.png")')}</div><div class="chart-container"><canvas id="box_chart"></canvas></div><div class="legend" style="margin-bottom:16px"><span><span class="sw" style="background:rgba(27,107,74,.3)"></span>Q1–Q3 range</span><span><span class="sw" style="background:#B5342E;border-radius:50%"></span>Median</span><span><span class="sw" style="background:#534AB7;border-radius:50%"></span>Mean</span></div><table class="data-table"><thead><tr><th>Sample</th><th>n</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th><th>Mean</th></tr></thead><tbody>${trows}</tbody></table>`;
+  if(charts.box_chart)charts.box_chart.destroy();
+  charts.box_chart=new Chart(document.getElementById('box_chart'),{
+    type:'bar',
+    data:{labels:R.stats.map(s=>s.sample),datasets:[
+      {label:'_base',data:R.stats.map(s=>s.q1),backgroundColor:'transparent',borderWidth:0,barPercentage:.5},
+      {label:'IQR',data:R.stats.map(s=>s.q3-s.q1),backgroundColor:'rgba(27,107,74,.22)',borderColor:'rgba(27,107,74,.5)',borderWidth:1,barPercentage:.5},
+      {type:'scatter',label:'Median',data:R.stats.map((s,i)=>({x:i,y:s.median})),backgroundColor:'#B5342E',pointRadius:6,pointStyle:'rectRot'},
+      {type:'scatter',label:'Mean',data:R.stats.map((s,i)=>({x:i,y:s.mean})),backgroundColor:'#534AB7',pointRadius:4}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{filter:i=>i.datasetIndex>0,callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toFixed(4)}}},scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45,minRotation:45,font:{size:11}}},y:{stacked:true,title:{display:true,text:'Concentration (mg/L)',font:{size:13}},grid:{color:'rgba(0,0,0,.06)'}}}}
+  });
+}
+
+function renderScatterTab(panelId,chartId,data,keys,title,filename){
+  const p=document.getElementById(panelId);
+  p.innerHTML=`<div class="chart-header"><div class="chart-title">${title}</div>${dlBtnH('PNG','dlChart("'+chartId+'","'+filename+'")')}</div><div class="chart-container"><canvas id="${chartId}"></canvas></div>`;
+  if(charts[chartId])charts[chartId].destroy();
+  const activeKeys=keys.filter(k=>data.some(s=>s.key===k));
+  const ds=activeKeys.map((k,i)=>({label:k,data:data.filter(s=>s.key===k).map(d=>({x:k,y:d.final_conc})),backgroundColor:COLORS[i%COLORS.length]+'BB',pointRadius:4,pointHoverRadius:6}));
+  charts[chartId]=new Chart(document.getElementById(chartId),{
+    type:'scatter',data:{datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toFixed(4)}}},scales:{x:{type:'category',labels:activeKeys,grid:{display:false},ticks:{maxRotation:45,minRotation:45,font:{size:11}}},y:{title:{display:true,text:'Concentration (mg/L)',font:{size:13}},grid:{color:'rgba(0,0,0,.06)'}}}}
+  });
+}
+
+function renderTableTab(R){
+  const p=document.getElementById('panelTable');
+  const rows=R.stats.map(s=>`<tr><td>${s.sample}</td><td>${s.n}</td><td>${s.min.toFixed(4)}</td><td>${s.q1.toFixed(4)}</td><td class="hl">${s.median.toFixed(4)}</td><td>${s.q3.toFixed(4)}</td><td>${s.max.toFixed(4)}</td><td>${s.mean.toFixed(4)}</td><td>${s.geoMean.toFixed(4)}</td></tr>`).join('');
+  p.innerHTML=`<div class="chart-header"><div class="chart-title">Summary statistics</div>${dlBtnH('CSV','dlSummaryCSV()')}</div><table class="data-table"><thead><tr><th>Sample</th><th>n</th><th>Min</th><th>Q1</th><th>Median</th><th>Q3</th><th>Max</th><th>Arith. mean</th><th>Geo. mean</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderExport(){
+  document.getElementById('exportPanel').innerHTML=`<h3>Export data</h3><div class="export-row">${dlBtnH('All results CSV','dlAllCSV()')} ${dlBtnH('Clean results CSV','dlCleanCSV()')} ${dlBtnH('Summary stats CSV','dlSummaryCSV()')}</div>`;
+  document.getElementById('dbPanel').style.display='block';
+  document.getElementById('dbStatus').className='db-status';
+  document.getElementById('dbStatus').innerHTML='';
+}
+
+/* ── DOWNLOADS ── */
+function trigCSV(d,n){const c=Papa.unparse(d);const b=new Blob([c],{type:'text/csv'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=n;a.click();URL.revokeObjectURL(u);}
+function fmt(r){return{well:r.well,key:r.key,measurement:r.measurement,concentration:r.concentration,dilution:r.dilution,calculated_concentration:r.calc_conc.toFixed(4),final_concentration_with_dilution:r.final_conc.toFixed(4)};}
+function dlAllCSV(){trigCSV(results.allResults.map(fmt),'final_quantified_results.csv');}
+function dlCleanCSV(){trigCSV(results.cleanResults.map(fmt),'results_no_outliers.csv');}
+function dlSummaryCSV(){trigCSV(results.stats.map(s=>({Sample:s.sample,n:s.n,Min:s.min.toFixed(4),Q1:s.q1.toFixed(4),Median:s.median.toFixed(4),Q3:s.q3.toFixed(4),Max:s.max.toFixed(4),'Arithmetic Mean':s.mean.toFixed(4),'Geometric Mean':s.geoMean.toFixed(4)})),'summary_statistics.csv');}
+function dlChart(id,fn){const c=document.getElementById(id);if(!c)return;const a=document.createElement('a');a.download=fn;a.href=c.toDataURL('image/png',1.0);a.click();}
+
+/* ── GITLAB SETTINGS ── */
+function loadGLSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('gl_settings')||'{}');
+    if(s.project)document.getElementById('glProject').value=s.project;
+    if(s.branch)document.getElementById('glBranch').value=s.branch;
+    if(s.token)document.getElementById('glToken').value=s.token;
+  }catch(e){}
+}
+function saveGLSettings(){
+  const s={
+    project:document.getElementById('glProject').value.trim(),
+    branch:document.getElementById('glBranch').value.trim()||'main',
+    token:document.getElementById('glToken').value.trim()
+  };
+  try{localStorage.setItem('gl_settings',JSON.stringify(s));}catch(e){}
+  return s;
+}
+function clearGLSettings(){
+  try{localStorage.removeItem('gl_settings');}catch(e){}
+  document.getElementById('glProject').value='';
+  document.getElementById('glBranch').value='main';
+  document.getElementById('glToken').value='';
+}
+function toggleTokenVis(){
+  const inp=document.getElementById('glToken');
+  const btn=document.getElementById('toggleTok');
+  if(inp.type==='password'){inp.type='text';btn.textContent='Hide';}
+  else{inp.type='password';btn.textContent='Show';}
+}
+loadGLSettings();
+
+/* ── DATABASE PUSH ── */
+function buildFullRows(){
+  if(!results||!results.allResults.length)return{cols:[],rows:[]};
+  const sample=results.allResults[0];
+  const skip=new Set(['_key','_conc','_dil','calc_conc','final_conc','key','concentration','dilution','well','measurement']);
+  const layoutCols=Object.keys(sample).filter(k=>!skip.has(k));
+  const outCols=[...layoutCols,'well','measurement','key','concentration','dilution','calculated_concentration','final_concentration_with_dilution'];
+  const rows=results.allResults.map(r=>{
+    const row={};
+    layoutCols.forEach(c=>{row[c]=r[c]??'';});
+    row.well=r.well;
+    row.measurement=r.measurement;
+    row.key=r.key;
+    row.concentration=r.concentration;
+    row.dilution=r.dilution;
+    row.calculated_concentration=parseFloat(r.calc_conc.toFixed(4));
+    row.final_concentration_with_dilution=parseFloat(r.final_conc.toFixed(4));
+    return row;
+  });
+  return{cols:outCols,rows};
+}
+
+function makeCSVString(rows){return Papa.unparse(rows);}
+
+function generateFilename(){
+  const now=new Date();
+  const ts=now.toISOString().slice(0,16).replace(/[:T]/g,'-');
+  const src=(rawFileName||'results').replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9_-]/g,'_');
+  return src+'_processed_'+ts+'.csv';
+}
+
+async function pushToDB(downloadOnly){
+  const status=document.getElementById('dbStatus');
+  const btn=document.getElementById('dbBtn');
+  btn.disabled=true;
+  status.className='db-status info';
+  status.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px"></span>Validating columns…';
+
+  try{
+    // Build output rows
+    const{cols,rows}=buildFullRows();
+    if(!rows.length){
+      status.className='db-status err';status.innerHTML='No results to export.';btn.disabled=false;return;
+    }
+    const outCols=cols.map(c=>c.toLowerCase());
+
+    // Try loading DB to validate
+    let dbCols=null;
+    try{
+      const SQL=await initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f});
+      const resp=await fetch('cfps.db');
+      if(resp.ok){
+        const buf=await resp.arrayBuffer();
+        const db=new SQL.Database(new Uint8Array(buf));
+        const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='results'");
+        if(tables.length&&tables[0].values.length){
+          const info=db.exec("PRAGMA table_info('results')");
+          if(info.length) dbCols=info[0].values.map(r=>r[1].toLowerCase());
+        }
+        db.close();
+      }
+    }catch(e){dbCols=null;}
+
+    // Column validation
+    let colsOK=true;
+    let diffHTML='';
+
+    if(dbCols!==null){
+      const dbSet=new Set(dbCols.filter(c=>c!=='source_file'));
+      const outSet=new Set(outCols);
+      const missing=[...dbSet].filter(c=>!outSet.has(c));
+      const extra=[...outSet].filter(c=>!dbSet.has(c));
+
+      if(missing.length||extra.length){
+        colsOK=false;
+        diffHTML='<div class="col-diff">';
+        if(missing.length) diffHTML+='<div><strong>Missing from output</strong> (in DB): '+missing.map(c=>'<span class="miss">'+c+'</span>').join(', ')+'</div>';
+        if(extra.length) diffHTML+=(missing.length?'<br>':'')+'<div><strong>Extra in output</strong> (not in DB): '+extra.map(c=>'<span class="extra">'+c+'</span>').join(', ')+'</div>';
+        diffHTML+='</div>';
+      }
+    }
+
+    if(!colsOK){
+      status.className='db-status err';
+      status.innerHTML='<strong>Column mismatch</strong> — cannot append. '+outCols.length+' output columns vs '+dbCols.filter(c=>c!=='source_file').length+' in table.'+diffHTML;
+      btn.disabled=false;return;
+    }
+
+    const csvString=makeCSVString(rows);
+    const filename=generateFilename();
+
+    // Download-only mode
+    if(downloadOnly){
+      trigCSV(rows,filename);
+      const label=dbCols?'Columns validated against existing table.':'No existing table — this will create the schema.';
+      status.className='db-status ok';
+      status.innerHTML='Downloaded <strong>'+filename+'</strong> ('+rows.length+' rows). '+label+' Drop it into <code>data/results/</code> and push.';
+      btn.disabled=false;return;
+    }
+
+    // Auto-push mode — need GitLab settings
+    const gl=saveGLSettings();
+    if(!gl.project||!gl.token){
+      status.className='db-status err';
+      status.innerHTML='Fill in your GitLab project ID and personal access token above to push automatically.';
+      btn.disabled=false;return;
+    }
+
+    status.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px"></span>Columns valid — pushing to GitLab…';
+
+    // Encode project ID (handle slashes in paths like user/repo)
+    const projectId=encodeURIComponent(gl.project);
+    const filePath='data/results/'+filename;
+
+    const commitPayload={
+      branch:gl.branch,
+      commit_message:'[AbsQuant] Add '+filename+' ('+rows.length+' rows)',
+      actions:[{
+        action:'create',
+        file_path:filePath,
+        content:csvString
+      }]
+    };
+
+    const resp=await fetch('https://gitlab.com/api/v4/projects/'+projectId+'/repository/commits',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'PRIVATE-TOKEN':gl.token
+      },
+      body:JSON.stringify(commitPayload)
+    });
+
+    if(resp.ok){
+      const data=await resp.json();
+      const shortSha=data.id?data.id.substring(0,8):'';
+      status.className='db-status ok';
+      status.innerHTML='<strong>Pushed successfully</strong> — committed <code>'+filePath+'</code> ('+rows.length+' rows) to <code>'+gl.branch+'</code>'+(shortSha?' · <code>'+shortSha+'</code>':'')+'. The pipeline will rebuild the database automatically.';
+    }else{
+      const errData=await resp.json().catch(()=>({}));
+      const errMsg=errData.message||errData.error||resp.statusText;
+      status.className='db-status err';
+      status.innerHTML='<strong>GitLab API error ('+resp.status+')</strong>: '+errMsg;
+    }
+
+    btn.disabled=false;
+
+  }catch(err){
+    status.className='db-status err';
+    status.innerHTML='Error: '+err.message;
+    btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>

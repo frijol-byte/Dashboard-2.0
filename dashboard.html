@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CFPS Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Mono','SF Mono',monospace;background:#fff;color:#1e293b}
+.nav{display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:8px;padding:0 14px}
+.nav a{padding:8px 16px;font-size:10.5px;font-weight:400;color:#94a3b8;text-decoration:none;border-bottom:2px solid transparent;font-family:inherit;margin-bottom:-1px}
+.nav a.active{font-weight:600;color:#0f172a;border-bottom-color:#2563eb}
+.nav a:hover{color:#475569}
+.zoom-wrap{position:relative;overflow:hidden;border-radius:4px;cursor:grab}
+.zoom-wrap:active{cursor:grabbing}
+.zoom-hint{position:absolute;bottom:2px;right:6px;font-size:8px;color:#c1c9d4;pointer-events:none}
+.home-btn{position:fixed;top:8px;right:160px;z-index:50;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;background:#fff;border:1px solid #d1d5db;color:#64748b;font-size:10px;font-weight:600;text-decoration:none;font-family:inherit;transition:all .2s}
+.home-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+</style>
+</head>
+<body>
+<a class="home-btn" href="index.html"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>Toolkit</a>
+<div id="app"></div>
+<script>
+function odb(){return new Promise(function(r,j){var q=indexedDB.open('cfps',1);q.onupgradeneeded=function(){q.result.createObjectStore('c')};q.onsuccess=function(){r(q.result)};q.onerror=function(){j(q.error)}})}
+function getCSV(){return odb().then(function(db){var tx=db.transaction('c','readonly'),rq=tx.objectStore('c').get('k');return new Promise(function(r){rq.onsuccess=function(){r(rq.result||null)};rq.onerror=function(){r(null)}})}).catch(function(){return null})}
+function parseCSV(text){
+  var lines=text.trim().split('\n');var hdr=lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'').toUpperCase()});var rows=[];
+  for(var i=1;i<lines.length;i++){var vals=lines[i].split(',');var r={};for(var j=0;j<hdr.length;j++)r[hdr[j]]=(vals[j]||'').trim().replace(/"/g,'');rows.push(r)}
+  var all=rows.map(function(r){return{well:r.WELL||'',meas:parseFloat(r.MEASUREMENT)||0,rn:parseInt(r.ROW_NUMBER)||0,rl:r.ROW_LETTER||'',cn:parseInt(r.COLUMN_NUMBER)||0,key:r.KEY||'',lys:r.LYSATE||'',mm:r.MASTER_MIX||'',prod:r.PRODUCT||'',tmpl:r.TEMPLATE||'',op:r.OPERATOR||'',rv:parseFloat(r.REACTION_VOLUME)||0,dil:parseFloat(r.DILUTION)||0,eid:r.EXP_ID||'',tc:r.TEST_CONDITION||'',conc:parseFloat(r.FINAL_CONCENTRATION_WITH_DILUTION)||null,label:r.LABEL||'',vessel:r.VESSEL||'',stdConc:parseFloat(r.CONCENTRATION)||null,calcConc:parseFloat(r.CALCULATED_CONCENTRATION)||null}});
+  var samples=all.filter(function(r){return r.conc!==null&&r.key.indexOf('Standard')<0&&r.key.indexOf('spike-in')<0});
+  var std={};all.forEach(function(r){var isS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;if(isS&&r.stdConc!=null&&isFinite(r.stdConc)){if(!std[r.eid])std[r.eid]=[];std[r.eid].push([r.stdConc,Math.round(r.meas)])}});
+  var spk={};all.forEach(function(r){if(r.key.indexOf('spike-in')>=0&&r.meas>0){if(!spk[r.eid])spk[r.eid]=[];spk[r.eid].push({meas:Math.round(r.meas),dil:r.dil,conc:r.conc,calcConc:r.calcConc})}});
+  var samplePts={};samples.forEach(function(r){if(!samplePts[r.eid])samplePts[r.eid]=[];samplePts[r.eid].push(r.meas)});
+  var plate={};var eids2={};all.forEach(function(r){eids2[r.eid]=1});
+  Object.keys(eids2).sort().forEach(function(e){plate[e]=all.filter(function(r){return r.eid===e}).map(function(r){var iS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;return r.rn+','+r.cn+','+Math.round(r.meas)+(iS?',1':'')}).join(';')});
+  var meta={};var sE={};samples.forEach(function(r){sE[r.eid]=1});
+  Object.keys(sE).sort().forEach(function(e){var sub=samples.filter(function(r){return r.eid===e});var ops={},lys={},tms={},vols={};sub.forEach(function(r){if(r.op)ops[r.op]=1;if(r.lys)lys[r.lys]=1;if(r.tmpl)tms[r.tmpl]=1;if(r.rv)vols[r.rv]=1});meta[e]={o:Object.keys(ops),l:Object.keys(lys),t:Object.keys(tms),v:Object.keys(vols).map(Number).sort(function(a,b){return a-b}),n:sub.length}});
+  return{samples:samples,std:std,spk:spk,samplePts:samplePts,plate:plate,meta:meta}
+}
+getCSV().then(function(c){
+  if(c){window.__CSV=c.csv;window.PARSED=parseCSV(window.__CSV);window.dispatchEvent(new CustomEvent('data-ready'))}
+  else{window.location.href='load.html'}
+});
+</script>
+<script type="text/babel">
+const{useState,useMemo,useRef,useCallback,useEffect}=React;
+function Q(a,q){if(!a||!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);return lo===hi?s[lo]:s[lo]+(p-lo)*(s[hi]-s[lo]);}
+function mn(a){return a&&a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function stdev(a){if(!a||a.length<2)return 0;const m=mn(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
+function iqrClean(v){if(!v||v.length<4)return v||[];const q1=Q(v,.25),q3=Q(v,.75),r=q3-q1;return v.filter(x=>x>=q1-1.5*r&&x<=q3+1.5*r);}
+function fmtN(v){if(!isFinite(v))return"0";return v>=1e3?(v/1e3).toFixed(1)+"k":v.toFixed(0);}
+const PAL=["#2563eb","#d97706","#059669","#dc2626","#7c3aed","#db2777","#0891b2","#65a30d","#ea580c","#4f46e5","#a855f7","#14b8a6"];
+const CM={Premium:"#2563eb",Economy:"#d97706",Ready96:"#059669",control:"#64748b",neg:"#9ca3af","12-l neg ctrl":"#9ca3af",IB:"#db2777",JC:"#7c3aed",RK:"#0891b2","12-L":"#dc2626","15-L":"#ea580c","17-L":"#2563eb","20-L":"#059669","21-L":"#7c3aed","Arbor lysate":"#db2777",plasmid:"#2563eb",linear:"#d97706","5":"#db2777","10":"#2563eb","20":"#059669"};
+const gc=k=>CM[k]||CM[String(k)]||CM[String(parseFloat(k))]||"#6b7280";
+const gL=(r,b)=>{if(!r)return"";if(b==="lysate_mm")return(r.lys||"")+"/"+(r.mm||"");if(b==="product")return r.prod||"";if(b==="lysate")return r.lys||"";if(b==="rxn_vol")return(r.rv||0)+"µL";if(b==="template")return r.tmpl||"";if(b==="master_mix")return r.mm||"";if(b==="operator")return r.op||"";if(b==="test_cond")return r.tc||"";if(b==="experiment")return r.eid||"";return r.lys||"";};
+const GO=[["product","Product"],["lysate","Lysate"],["operator","Operator"],["template","Template"],["rxn_vol","Rxn Vol"],["test_cond","Test Cond"],["master_mix","Master Mix"],["lysate_mm","Lys/MM"]];
+const PO=[...GO,["experiment","Experiment"],["key","Key"],["vessel","Vessel"]];
+const PR="ABCDEFGHIJKLMNOP".split("");const PC=Array.from({length:24},(_,i)=>i+1);
+const sty={pn:{background:"#fff",borderRadius:5,border:"1px solid #e2e8f0",padding:"8px 10px",overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.04)"},pt:{fontSize:10.5,fontWeight:600,color:"#0f172a",marginBottom:4,display:"flex",alignItems:"center",gap:5},dt:c=>({display:"inline-block",width:6,height:6,borderRadius:"50%",background:c,flexShrink:0}),sl:{background:"#f8fafc",border:"1px solid #d1d5db",color:"#1e293b",borderRadius:3,padding:"2px 5px",fontSize:10,fontFamily:"inherit",cursor:"pointer",outline:"none"},th:{padding:"4px 5px",borderBottom:"1px solid #e2e8f0",color:"#64748b",textAlign:"left",fontWeight:600,textTransform:"uppercase",letterSpacing:".04em",fontSize:8.5,background:"#fff"},td:{padding:"3px 5px",borderBottom:"1px solid #f1f5f9"},tn:{padding:"3px 5px",borderBottom:"1px solid #f1f5f9",textAlign:"right",fontVariantNumeric:"tabular-nums"},bt:{fontSize:9,color:"#64748b",background:"#f8fafc",border:"1px solid #d1d5db",borderRadius:3,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"},fb:{background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",padding:"6px 8px",marginBottom:6,display:"flex",flexDirection:"column",gap:3}};
+function Tip({x,y,children}){if(!children)return null;return<div style={{position:"fixed",left:Math.min(x+14,window.innerWidth-300),top:y-8,background:"#1e293b",color:"#f1f5f9",padding:"5px 9px",borderRadius:5,fontSize:10.5,pointerEvents:"none",zIndex:999,maxWidth:300,lineHeight:1.4,boxShadow:"0 4px 14px rgba(0,0,0,.35)",border:"1px solid #334155",fontFamily:"inherit",whiteSpace:"pre-line"}}>{children}</div>;}
+function Ch({label,options,selected,onChange,colorFn,formatFn}){const a=selected.length===options.length;return<div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}><span style={{fontSize:8.5,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",width:56,flexShrink:0,textAlign:"right",fontWeight:600}}>{label}</span><button onClick={()=>onChange(a?[options[0]]:options)} style={{fontSize:8,padding:"1px 5px",borderRadius:3,border:"1px solid #d1d5db",cursor:"pointer",fontFamily:"inherit",background:a?"#e2e8f0":"transparent",color:a?"#1e293b":"#94a3b8"}}>ALL</button>{options.map(o=>{const on=selected.includes(o);const c=colorFn?colorFn(o):"#2563eb";return<button key={String(o)} onClick={()=>{const n=on?selected.filter(x=>x!==o):[...selected,o];onChange(n.length?n:[o]);}} style={{fontSize:8.5,padding:"1px 6px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?c+"66":"#d1d5db"),background:on?c+"14":"transparent",color:on?"#1e293b":"#94a3b8"}}>{formatFn?formatFn(o):String(o)}</button>;})}</div>;}
+function GS({g,sg,s,ss}){return<div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>Group:</span><select style={sty.sl} value={g} onChange={e=>sg(e.target.value)}>{GO.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>+Sub:</span><select style={sty.sl} value={s} onChange={e=>ss(e.target.value)}><option value="none">None</option>{GO.filter(([k])=>k!==g).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div></div>;}
+function Zoomable({children,width,height}){const[sc,setSc]=useState(1);const[tx,setTx]=useState(0);const[ty,setTy]=useState(0);const[drag,setDrag]=useState(false);const[ds,setDs]=useState(null);const ref=useRef(null);const onW=useCallback(e=>{e.preventDefault();setSc(s=>Math.min(8,Math.max(.5,s*(e.deltaY>0?.9:1.1))));},[]);useEffect(()=>{const el=ref.current;if(el)el.addEventListener('wheel',onW,{passive:false});return()=>{if(el)el.removeEventListener('wheel',onW)};},[onW]);return<div ref={ref} className="zoom-wrap" style={{width:width||"100%",height:height||"auto"}} onMouseDown={e=>{if(e.button===0){setDrag(true);setDs({x:e.clientX-tx,y:e.clientY-ty})}}} onMouseMove={e=>{if(drag&&ds){setTx(e.clientX-ds.x);setTy(e.clientY-ds.y)}}} onMouseUp={()=>{setDrag(false);setDs(null)}} onMouseLeave={()=>{setDrag(false);setDs(null)}} onDoubleClick={()=>{setSc(1);setTx(0);setTy(0)}}><div style={{transform:"translate("+tx+"px,"+ty+"px) scale("+sc+")",transformOrigin:"0 0",transition:drag?"none":"transform 0.1s"}}>{children}</div>{sc!==1&&<span className="zoom-hint">{Math.round(sc*100)+"% dblclick reset"}</span>}</div>;}
+// Shared filter + header wrapper
+function PageWrap({data,activePage,children}){
+  const{samples}=data;
+  const eids=useMemo(()=>{const s={};samples.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[samples]);
+  const allLys=useMemo(()=>{const s={};samples.forEach(r=>{if(r.lys)s[r.lys]=1});return Object.keys(s).sort();},[samples]);
+  const allMM=useMemo(()=>{const s={};samples.forEach(r=>{if(r.mm)s[r.mm]=1});return Object.keys(s).sort();},[samples]);
+  const allProd=useMemo(()=>{const s={};samples.forEach(r=>{if(r.prod)s[r.prod]=1});return Object.keys(s).sort();},[samples]);
+  const allTmpl=useMemo(()=>{const s={};samples.forEach(r=>{if(r.tmpl)s[r.tmpl]=1});return Object.keys(s).sort();},[samples]);
+  const allOp=useMemo(()=>{const s={};samples.forEach(r=>{if(r.op)s[r.op]=1});return Object.keys(s).sort();},[samples]);
+  const allRV=useMemo(()=>{const s={};samples.forEach(r=>{if(r.rv)s[r.rv]=1});return Object.keys(s).map(Number).sort((a,b)=>a-b);},[samples]);
+  const allTC=useMemo(()=>{const s={};samples.forEach(r=>{if(r.tc)s[r.tc]=1});return Object.keys(s).sort();},[samples]);
+  const[fE,sfE]=useState(eids);const[fL,sfL]=useState(allLys);const[fM,sfM]=useState(allMM);
+  const[fP,sfP]=useState(()=>allProd.filter(p=>p!=="neg"&&p!=="12-l neg ctrl"));
+  const[fT,sfT]=useState(allTmpl);const[fO,sfO]=useState(allOp);const[fR,sfR]=useState(allRV);const[fC,sfC]=useState(allTC);
+  const[shF,sShF]=useState(true);
+  const fd=useMemo(()=>samples.filter(r=>fE.indexOf(r.eid)>=0&&fL.indexOf(r.lys)>=0&&fM.indexOf(r.mm)>=0&&fP.indexOf(r.prod)>=0&&fT.indexOf(r.tmpl)>=0&&fO.indexOf(r.op)>=0&&fR.indexOf(r.rv)>=0&&(r.tc===""||fC.indexOf(r.tc)>=0)),[samples,fE,fL,fM,fP,fT,fO,fR,fC]);
+  const cl=useMemo(()=>iqrClean(fd.map(r=>r.conc)),[fd]);
+  const kp={n:fd.length,m:cl.length?mn(cl):0,md:cl.length?Q(cl,.5):0,cv:cl.length&&mn(cl)?stdev(cl)/mn(cl)*100:0,ex:(()=>{const s={};fd.forEach(r=>{s[r.eid]=1});return Object.keys(s).length;})(),o:fd.length-cl.length};
+  const pages=[{k:"load",l:"📂 Load Data",href:"load.html"},{k:"index",l:"📊 Overview",href:"dashboard.html"},{k:"curves",l:"🔬 Curves & Lots",href:"curves.html"},{k:"experiment",l:"🧪 Experiment",href:"experiment.html"},{k:"raw",l:"📋 Raw Data",href:"raw.html"},{k:"repro",l:"🔄 Reproducibility",href:"repro.html"}];
+  return<div style={{fontFamily:"'IBM Plex Mono','SF Mono',monospace",background:"#fff",color:"#1e293b",minHeight:"100vh",padding:"10px 14px",fontSize:11}}>
+    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",borderBottom:"1px solid #e2e8f0",paddingBottom:6}}><div><div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>CFPS Dashboard</div><div style={{fontSize:10,color:"#64748b"}}>Cell-Free Protein Synthesis · Multi-experiment</div></div><div style={{display:"flex",gap:6}}><span style={{fontSize:9,color:"#059669",background:"#f8fafc",padding:"2px 7px",borderRadius:8,border:"1px solid #05966933"}}>{fd.length+"/"+samples.length}</span><span style={{fontSize:9,color:"#d97706",background:"#f8fafc",padding:"2px 7px",borderRadius:8,border:"1px solid #d9770633"}}>{kp.ex+" exp"}</span></div></div>
+    <div className="nav">{pages.map(p=><a key={p.k} href={p.href} className={activePage===p.k?"active":""}>{p.l}</a>)}</div>
+    <div style={{marginBottom:6}}><button onClick={()=>sShF(!shF)} style={{...sty.bt,marginBottom:4}}>{(shF?"▾":"▸")+" Filters ("+fd.length+")"}</button>{shF&&<div style={sty.fb}><Ch label="Exp ID" options={eids} selected={fE} onChange={sfE}/><Ch label="Template" options={allTmpl} selected={fT} onChange={sfT} colorFn={gc}/><Ch label="Rxn Vol" options={allRV} selected={fR} onChange={sfR} colorFn={v=>gc(String(v))} formatFn={v=>v+"µL"}/><Ch label="Lysate" options={allLys} selected={fL} onChange={sfL} colorFn={gc}/><Ch label="Master Mix" options={allMM} selected={fM} onChange={sfM}/><Ch label="Product" options={allProd} selected={fP} onChange={sfP} colorFn={gc}/><Ch label="Operator" options={allOp} selected={fO} onChange={sfO} colorFn={gc}/><Ch label="Test Cond" options={allTC} selected={fC} onChange={sfC}/></div>}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:5,marginBottom:6}}>{[["#2563eb",kp.n,"Filtered"],["#059669",isFinite(kp.m)?kp.m.toFixed(0):"0","Mean mg/L"],["#d97706",isFinite(kp.md)?kp.md.toFixed(0):"0","Median"],["#7c3aed",isFinite(kp.cv)?kp.cv.toFixed(1)+"%":"0%","CV%"],["#0891b2",kp.ex,"Experiments"],["#dc2626",kp.o,"Outliers"]].map((a,i)=><div key={i} style={{background:"#f8fafc",borderRadius:5,padding:"5px 8px",borderLeft:"3px solid "+a[0],border:"1px solid #e2e8f0",borderLeftColor:a[0]}}><div style={{fontSize:17,fontWeight:700,color:"#0f172a",lineHeight:1.2}}>{a[1]}</div><div style={{fontSize:8,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginTop:1}}>{a[2]}</div></div>)}</div>
+    {children({fd,data})}
+  </div>;
+}
+function AppWrap({activePage,renderContent}){
+  const[data,setData]=useState(null);
+  useEffect(()=>{function h(){if(window.PARSED)setData(window.PARSED);}window.addEventListener('data-ready',h);if(window.PARSED)setData(window.PARSED);return()=>window.removeEventListener('data-ready',h);},[]);
+  if(!data)return<div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>Waiting for data...</div>;
+  return<PageWrap data={data} activePage={activePage}>{({fd,data:d})=>renderContent({fd,data:d})}</PageWrap>;
+}
+function TabCurvesLots({filtered,stdData,spkData,samplePtsData}){
+  const[tip,setTip]=useState(null);
+  const eids=useMemo(()=>{const s={};Object.keys(stdData).forEach(e=>s[e]=1);Object.keys(spkData).forEach(e=>s[e]=1);return Object.keys(s).sort();},[stdData,spkData]);
+  const fits=useMemo(()=>eids.map(eid=>{const pts=(stdData[eid]||[]).filter(p=>Array.isArray(p)&&p.length>=2&&isFinite(p[0])&&isFinite(p[1]));if(pts.length<2)return{eid,pts,slope:0,inter:0,r2:0};const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),n=xs.length;let sx=0,sy=0,sxx=0,sxy=0;for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];sxx+=xs[i]*xs[i];sxy+=xs[i]*ys[i];}const den=n*sxx-sx*sx;if(Math.abs(den)<1e-10)return{eid,pts,slope:0,inter:0,r2:0};const slope=(n*sxy-sx*sy)/den,inter=(sy-slope*sx)/n,ymean=sy/n;let ssT=0,ssR=0;for(let i=0;i<n;i++){ssT+=(ys[i]-ymean)**2;ssR+=(ys[i]-(slope*xs[i]+inter))**2;}return{eid,pts,slope:+slope.toFixed(2),inter:+inter.toFixed(2),r2:ssT>0?+((1-ssR/ssT).toFixed(4)):0};}),[eids,stdData]);
+  const lots=useMemo(()=>{const g={};filtered.forEach(r=>{if(!r.lys||!r.mm)return;const k=r.lys+"/"+r.mm;if(!g[k])g[k]={};if(!g[k][r.eid])g[k][r.eid]=[];g[k][r.eid].push(r.conc);});return g;},[filtered]);
+  const lotKeys=useMemo(()=>Object.keys(lots).sort(),[lots]);
+  const lotExps=useMemo(()=>{const s={};filtered.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[filtered]);
+  const lotColors=useMemo(()=>{const c={};lotKeys.forEach((k,i)=>{c[k]=PAL[i%PAL.length]});return c;},[lotKeys]);
+  const XMark=({cx,cy,sz,color,opacity})=>{const d=sz||2.5;return<g><line x1={cx-d} y1={cy-d} x2={cx+d} y2={cy+d} stroke={color||"#94a3b8"} strokeWidth={1} strokeOpacity={opacity||.5}/><line x1={cx+d} y1={cy-d} x2={cx-d} y2={cy+d} stroke={color||"#94a3b8"} strokeWidth={1} strokeOpacity={opacity||.5}/></g>;};
+  return<div>{tip&&<Tip x={tip.x} y={tip.y}>{tip.c}</Tip>}
+    <div style={sty.pn}><div style={sty.pt}><span style={sty.dt("#2563eb")}/>Standard Curve QC</div>
+      <div style={{display:"flex",gap:8,marginBottom:6,fontSize:9,color:"#64748b",flexWrap:"wrap"}}><span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:3,background:"#2563eb",borderRadius:1,opacity:.4}}/> Fit</span><span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,borderRadius:"50%",background:"#2563eb",opacity:.7}}/> Standards</span><span style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:11,color:"#94a3b8",fontWeight:700,lineHeight:1}}>×</span> Samples</span><span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b"}}/> Spike-ins</span><span style={{marginLeft:"auto",fontSize:8,color:"#c1c9d4"}}>scroll=zoom · drag=pan · dblclick=reset</span></div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{fits.map(f=>{const spikes=spkData[f.eid]||[],sampMeas=samplePtsData[f.eid]||[];if(!f.pts.length&&!spikes.length)return<div key={f.eid} style={{background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",padding:8,minWidth:120}}><div style={{fontSize:9,fontWeight:700}}>{f.eid}: No data</div></div>;
+        const W=280,H=185,pad={t:10,r:10,b:26,l:38},iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;const allX=f.pts.map(p=>p[0]),allY=[...f.pts.map(p=>p[1]),...spikes.map(s=>s.meas),...sampMeas];const xMax=allX.length?Math.max(...allX)*1.05:128,yMax=allY.length?Math.max(...allY)*1.08:7000;const xSc=d3.scaleLinear().domain([0,xMax]).range([0,iw]),ySc=d3.scaleLinear().domain([0,yMax]).range([ih,0]);const ok=f.r2>=.99,wn=f.r2>=.98;const bg=ok?"#f0fdf4":wn?"#fffbeb":"#fef2f2",border=ok?"#bbf7d0":wn?"#fde68a":"#fecaca",rC=ok?"#059669":wn?"#d97706":"#dc2626";
+        const spkX=spikes.map(s=>({...s,xC:f.slope>0?Math.max(0,(s.meas-f.inter)/f.slope):0}));const sampX=f.slope>0?sampMeas.map(m=>({meas:m,x:Math.max(0,(m-f.inter)/f.slope)})):[];
+        return<div key={f.eid} style={{background:bg,borderRadius:5,border:"1px solid "+border,padding:6}}>
+          <div style={{fontSize:9,fontWeight:700,marginBottom:2}}>{f.eid+" "}<span style={{fontWeight:400,color:rC}}>{"R²="+f.r2}</span>{spikes.length>0&&<span style={{fontWeight:400,color:"#f59e0b",marginLeft:4}}>{"•"+spikes.length+" spk"}</span>}<span style={{fontWeight:400,color:"#94a3b8",marginLeft:4}}>{"•"+sampMeas.length+" smp"}</span></div>
+          <Zoomable width={W} height={H}><svg width={W} height={H}><g transform={"translate("+pad.l+","+pad.t+")"}>
+            {ySc.ticks(4).map(t=><g key={t}><line x1={0} x2={iw} y1={ySc(t)} y2={ySc(t)} stroke="#e2e8f0"/><text x={-4} y={ySc(t)} dy={3} textAnchor="end" fill="#94a3b8" fontSize={6.5} fontFamily="inherit">{t>=1e3?Math.round(t/1e3)+"k":Math.round(t)}</text></g>)}
+            {xSc.ticks(4).map(t=><text key={t} x={xSc(t)} y={ih+14} textAnchor="middle" fill="#94a3b8" fontSize={6.5} fontFamily="inherit">{Math.round(t)}</text>)}
+            {f.slope>0&&<line x1={xSc(0)} y1={ySc(f.inter)} x2={xSc(xMax)} y2={ySc(f.slope*xMax+f.inter)} stroke="#2563eb" strokeWidth={1.5} strokeOpacity={.35} strokeDasharray="4,3"/>}
+            {sampX.map((s,i)=>{const cx=xSc(Math.min(s.x,xMax)),cy=ySc(s.meas);if(!isFinite(cx)||!isFinite(cy))return null;return<XMark key={"x"+i} cx={cx} cy={cy} sz={2} color="#64748b" opacity={.3}/>;})}
+            {f.pts.map((p,i)=><circle key={"s"+i} cx={xSc(p[0])} cy={ySc(p[1])} r={3} fill="#2563eb" fillOpacity={.7} stroke="#fff" strokeWidth={.5} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:f.eid+" — Standard\nKnown: "+p[0]+" µg/mL\nMeas: "+p[1]+" RFU"})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>)}
+            {spkX.map((s,i)=><g key={"sp"+i}><line x1={0} y1={ySc(s.meas)} x2={xSc(Math.min(s.xC,xMax))} y2={ySc(s.meas)} stroke="#f59e0b" strokeWidth={.5} strokeOpacity={.3} strokeDasharray="2,2"/><circle cx={xSc(Math.min(s.xC,xMax))} cy={ySc(s.meas)} r={3} fill="#f59e0b" fillOpacity={.8} stroke="#fff" strokeWidth={.5} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:f.eid+" — Spike-in\nMeas: "+s.meas+" RFU\nBack-calc: "+s.xC.toFixed(1)+" µg/mL\nDil: "+s.dil+"×"+(s.conc!=null?"\nFinal: "+s.conc.toFixed(0)+" mg/L":"")})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/></g>)}
+            <text x={iw/2} y={ih+22} textAnchor="middle" fill="#94a3b8" fontSize={6.5}>Conc (µg/mL)</text><text transform={"translate(-30,"+ih/2+") rotate(-90)"} textAnchor="middle" fill="#94a3b8" fontSize={6.5}>RFU</text>
+          </g></svg></Zoomable>
+          <div style={{fontSize:7,color:"#64748b",textAlign:"center"}}>{"slope="+f.slope+" int="+f.inter+" n="+f.pts.length}</div></div>;})}</div>
+      <div style={{marginTop:8,overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr><th style={sty.th}>Exp</th><th style={{...sty.th,textAlign:"right"}}>Std</th><th style={{...sty.th,textAlign:"right"}}>Slope</th><th style={{...sty.th,textAlign:"right"}}>Int</th><th style={{...sty.th,textAlign:"right"}}>R²</th><th style={{...sty.th,textAlign:"center"}}>OK</th><th style={{...sty.th,textAlign:"right"}}>Spk</th><th style={{...sty.th,textAlign:"right"}}>Smp</th></tr></thead><tbody>{fits.map(f=>{const spk2=spkData[f.eid]||[],nS=(samplePtsData[f.eid]||[]).length;return<tr key={f.eid}><td style={sty.td}>{f.eid}</td><td style={sty.tn}>{f.pts.length}</td><td style={sty.tn}>{f.slope}</td><td style={sty.tn}>{f.inter}</td><td style={{...sty.tn,fontWeight:600,color:f.r2>=.99?"#059669":f.r2>=.98?"#d97706":"#dc2626"}}>{f.r2}</td><td style={{...sty.td,textAlign:"center"}}>{f.r2>=.99?"✅":f.r2>=.98?"⚠️":"❌"}</td><td style={sty.tn}>{spk2.length||"—"}</td><td style={sty.tn}>{nS}</td></tr>;})}</tbody></table></div>
+    </div>
+    {Object.keys(spkData).length>0&&<div style={{...sty.pn,marginTop:8}}><div style={sty.pt}><span style={sty.dt("#f59e0b")}/>Spike-in — by Dilution</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}><thead><tr><th style={sty.th}>Exp</th><th style={{...sty.th,textAlign:"right"}}>Dil</th><th style={{...sty.th,textAlign:"right"}}>n</th><th style={{...sty.th,textAlign:"right"}}>Mean RFU</th><th style={{...sty.th,textAlign:"right"}}>SD</th><th style={{...sty.th,textAlign:"right"}}>CV%</th><th style={{...sty.th,textAlign:"right"}}>Mean mg/L</th></tr></thead>
+      <tbody>{Object.keys(spkData).sort().flatMap(eid=>{const spikes=spkData[eid];const byDil={};spikes.forEach(s=>{const dk=s.dil>0?s.dil:"?";if(!byDil[dk])byDil[dk]=[];byDil[dk].push(s);});const dils=Object.keys(byDil).sort((a,b)=>Number(a)-Number(b));return dils.map((dk,di)=>{const grp=byDil[dk],mv=grp.map(s=>s.meas),cv2=grp.filter(s=>s.conc!=null).map(s=>s.conc),m=mn(mv),sd2=stdev(mv),cv=m>0?sd2/m*100:0;return<tr key={eid+"-"+dk} onMouseEnter={e=>e.currentTarget.style.background="#fffbeb"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>{di===0?<td style={{...sty.td,fontWeight:600}} rowSpan={dils.length}>{eid}</td>:null}<td style={sty.tn}>{dk}×</td><td style={sty.tn}>{grp.length}</td><td style={sty.tn}>{m.toFixed(0)}</td><td style={sty.tn}>{sd2.toFixed(0)}</td><td style={{...sty.tn,color:cv>30?"#dc2626":cv>15?"#d97706":"#059669",fontWeight:600}}>{cv.toFixed(1)+"%"}</td><td style={sty.tn}>{cv2.length?mn(cv2).toFixed(0):"—"}</td></tr>;});})}</tbody></table></div></div>}
+    {lotKeys.length>0&&lotExps.length>0&&<div style={{...sty.pn,marginTop:8}}><div style={sty.pt}><span style={sty.dt("#7c3aed")}/>Lot Tracking</div>
+      {(()=>{const W=700,H=230,pad2={t:14,r:14,b:36,l:54},iw2=W-pad2.l-pad2.r,ih2=H-pad2.t-pad2.b;const ls={};lotKeys.forEach(k=>{ls[k]={};lotExps.forEach(e=>{const v=lots[k]&&lots[k][e];if(v&&v.length){const cl=iqrClean(v);ls[k][e]={m:mn(cl),s:cl.length>1?stdev(cl):0,n:v.length};}});});let mx2=100;lotKeys.forEach(k=>{lotExps.forEach(e=>{const d=ls[k][e];if(d)mx2=Math.max(mx2,d.m+d.s);});});const ySc2=d3.scaleLinear().domain([0,mx2*1.12]).range([ih2,0]),xSc2=d3.scaleBand().domain(lotExps).range([0,iw2]).padding(.2);
+        return<div><Zoomable width={W} height={H}><svg width={W} height={H} style={{display:"block"}}><g transform={"translate("+pad2.l+","+pad2.t+")"}>
+          {ySc2.ticks(5).map(t=><g key={t}><line x1={0} x2={iw2} y1={ySc2(t)} y2={ySc2(t)} stroke="#e2e8f0"/><text x={-6} y={ySc2(t)} dy={3} textAnchor="end" fill="#64748b" fontSize={8}>{fmtN(t)}</text></g>)}
+          <text transform={"translate(-42,"+ih2/2+") rotate(-90)"} textAnchor="middle" fill="#64748b" fontSize={8.5}>mg/L</text>
+          {lotKeys.map(k=>{const pts=lotExps.filter(e=>ls[k][e]).map(e=>({x:xSc2(e)+xSc2.bandwidth()/2,y:ySc2(ls[k][e].m),e,d:ls[k][e]}));if(!pts.length)return null;return<g key={k}>{pts.length>=2&&<polyline points={pts.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke={lotColors[k]} strokeWidth={1.5} strokeDasharray="4,4" strokeOpacity={.4}/>}{pts.map(p=><g key={p.e}><line x1={p.x} x2={p.x} y1={ySc2(p.d.m+p.d.s)} y2={ySc2(Math.max(0,p.d.m-p.d.s))} stroke={lotColors[k]} strokeWidth={1.2} strokeOpacity={.4}/><circle cx={p.x} cy={p.y} r={5} fill={lotColors[k]} stroke="#fff" strokeWidth={1.5} onMouseMove={ev=>setTip({x:ev.clientX,y:ev.clientY,c:p.e+" — "+k+"\nMean: "+p.d.m.toFixed(0)+"±"+p.d.s.toFixed(0)+"\nn="+p.d.n})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/></g>)}</g>;
+          })}
+          {lotExps.map(e=><text key={e} x={xSc2(e)+xSc2.bandwidth()/2} y={ih2+14} textAnchor="middle" fill="#475569" fontSize={8.5}>{e}</text>)}
+        </g></svg></Zoomable>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"3px 10px",paddingLeft:54,marginTop:3}}>{lotKeys.map(k=><span key={k} style={{display:"flex",alignItems:"center",gap:3,fontSize:8.5,color:"#475569"}}><span style={{width:8,height:8,borderRadius:"50%",background:lotColors[k],flexShrink:0}}/>{k}</span>)}</div></div>;
+      })()}</div>}
+  </div>;
+}
+
+ReactDOM.render(<AppWrap activePage="curves" renderContent={({fd,data})=><TabCurvesLots filtered={fd} stdData={data.std} spkData={data.spk} samplePtsData={data.samplePts}/>}/>,document.getElementById("app"));
+</script></body></html>

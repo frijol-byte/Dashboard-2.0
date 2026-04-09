@@ -1,0 +1,11 @@
+num,date_of_prep_yyyymmdd,operator,eln,fluorescence_protein,aliquot_volume_ul,total_volume_ul,storage_location,notes,run1_-_e61,run2-e75,run3-e78,run4-e104,run5
+1,20251010,Rahul Karandikar,,eGFP,10,400,P902 -80C Freezer space,0.5mg/mL,0.525,0.44,0.47,,
+2,20251105,Isis Botelho Nunes da Silva,,eGFP,10,260,P902 -80C Freezer space,failed QC,,,,,
+3,20251106,Rahul Karandikar,20251105-E99-Standard curve setup,eGFP,10,140,P902 -80C Freezer space,0.5mg/mL,-,-,-,0.45,
+4,20251103,Rahul Karandikar,P902_E123-RM-20251103-Prepare bulk eGFP standard curve and spike-in controls with C11 Lysate,eGFP,10,200,P902 -80C Freezer space,0.5mg/mL,0.642 (E129),0.547 (E137),,,
+5,20251103,Rahul Karandikar,P902_E124-RM-20251103-Prepare standard curves and spike-in controls using Ginkgo sfGFP,sfGFP,10,200,P902 -80C Freezer space,0.5mg/mL,0.589 (E129),0.527 (E137),,,
+6,,,,,,,,,,,,,
+7,,,,,,,,,,,,,
+8,,,,,,,,,,,,,
+9,,,,,,,,,,,,,
+10,,,,,,,,,,,,,

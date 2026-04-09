@@ -1,0 +1,12 @@
+date_yymmdd,fte,batching_sheet_link,eln,volume_created_ml,lysates_optimized,sop_used,use,experiment_number,lot_name
+2025-08-27,Jose Morales Hemuda Rahul Karandikar,20250827 P902 E16 Salt Optimization Echo setup,,3.6,R&D,,R&D,P902_E16,
+2025-09-04,Rahul Karandikar,20250904 P902 E33 Lysis Test 2 Salt Optimization Echo setup,,,,,,,
+2025-09-19,Rahul Karandikar Kevin Christopher,20250919 P902 E49 Salt Optimization Echo setup,,,"20250918-L-5
+20250918-L-6
+20250918-L-7",,,,
+2025-10-07,Rahul Karandikar,,,4,20250918-E48-F11,-,R&D,E64,
+2025-10-09,Rahul Karandikar,20251009 P902 E66 Salt Optimization Repeat,,3,,-,,E66,
+2025-10-16,Rahul Karandikar,P902_E74-SO-20251015-SO for pellet from 20250930 Fermentation,,12,,-,R&D,"E74, E77",20251016-MM
+2025-10-22,Rahul Karandikar,P902_E80 Troubleshooting MM,,3,-,-,R&D,E80,20251021-MM
+2025-11-07,Rahul Karandikar,,,,,,,,
+2025-12-04,Rahul Karandikar,P902_E125-MM-20251204-Non-salt optimized Mastermix Concentrate,-,20,-,-,R&D,,MM_20251204

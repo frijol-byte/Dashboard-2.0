@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFPS Data Browser</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#6D28D9;--accent-light:#F3EEFB;--accent-dark:#4C1D95;
+  --green:#1B6B4A;--green-light:#E8F5EE;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+.app{max-width:1060px;margin:0 auto;padding:2rem 1.5rem 4rem}
+
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text2);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.header{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.header-icon{width:44px;height:44px;border-radius:12px;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.header h1{font-size:1.4rem;font-weight:600;letter-spacing:-.02em}
+.header p{font-size:.85rem;color:var(--text2)}
+
+.status{padding:.6rem 1rem;border-radius:var(--radius);font-size:.82rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:8px}
+.status.loading{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+.status.ready{background:var(--green-light);color:var(--green);border:1px solid #A7F3D0}
+.status.error{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tag{font-family:'JetBrains Mono',monospace;font-weight:500;font-size:.75rem;background:rgba(0,0,0,.05);padding:2px 8px;border-radius:6px}
+
+.tables-bar{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
+.table-chip{
+  padding:6px 14px;border-radius:8px;font-size:.8rem;font-weight:500;
+  border:1px solid var(--border);background:var(--surface);color:var(--text2);
+  cursor:pointer;transition:all .2s;font-family:inherit;
+}
+.table-chip:hover{border-color:var(--accent);color:var(--accent)}
+.table-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.query-area{margin-bottom:1.5rem}
+.query-area label{font-size:.78rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px}
+.query-row{display:flex;gap:10px}
+.query-input{
+  flex:1;font-family:'JetBrains Mono',monospace;font-size:.85rem;
+  padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text);resize:none;
+  transition:border-color .2s;
+}
+.query-input:focus{outline:none;border-color:var(--accent)}
+.run-btn{
+  padding:10px 24px;border-radius:var(--radius);border:none;
+  background:var(--accent);color:#fff;font-size:.85rem;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;
+}
+.run-btn:hover{background:var(--accent-dark)}
+.run-btn:disabled{opacity:.4;cursor:default}
+
+.shortcuts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.shortcut{
+  font-size:.72rem;padding:4px 10px;border-radius:6px;
+  background:var(--surface2);color:var(--text2);border:none;
+  cursor:pointer;font-family:'JetBrains Mono',monospace;
+  transition:all .2s;
+}
+.shortcut:hover{background:var(--accent-light);color:var(--accent)}
+
+.result-info{font-size:.78rem;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+
+.dl-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text2);font-size:.72rem;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
+.dl-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
+.data-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.data-table th{
+  position:sticky;top:0;
+  padding:8px 10px;text-align:left;font-weight:600;color:var(--text3);
+  border-bottom:1.5px solid var(--border);font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.04em;background:var(--surface);
+}
+.data-table td{
+  padding:6px 10px;border-bottom:1px solid var(--surface2);
+  font-family:'JetBrains Mono',monospace;font-size:.75rem;
+  max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.data-table tr:hover td{background:var(--surface2)}
+.data-table td.num{text-align:right}
+
+.empty-state{text-align:center;padding:3rem;color:var(--text3)}
+.empty-state .icon{font-size:2rem;margin-bottom:.5rem;opacity:.4}
+.empty-state p{font-size:.85rem}
+
+.fade-in{animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <a class="home-btn" href="index.html">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+    Toolkit home
+  </a>
+
+  <div class="header fade-in">
+    <div class="header-icon">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="11" cy="6" rx="8" ry="3"/><path d="M3 6v5c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M3 11v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5"/></svg>
+    </div>
+    <div>
+      <h1>Data browser</h1>
+      <p>Query the CFPS experiment database directly in your browser</p>
+    </div>
+  </div>
+
+  <div id="status" class="status loading fade-in">
+    <span class="spinner"></span> Loading database…
+  </div>
+
+  <div id="mainUI" style="display:none">
+    <div class="tables-bar fade-in" id="tablesBar"></div>
+
+    <div class="query-area fade-in">
+      <label>SQL query</label>
+      <div class="query-row">
+        <textarea class="query-input" id="queryInput" rows="2" spellcheck="false">SELECT * FROM results LIMIT 50</textarea>
+        <button class="run-btn" id="runBtn" onclick="runQuery()">Run</button>
+      </div>
+      <div class="shortcuts" id="shortcuts"></div>
+    </div>
+
+    <div class="result-info" id="resultInfo" style="display:none">
+      <span id="rowCount"></span>
+      <span style="flex:1"></span>
+      <button class="dl-btn" onclick="downloadResults()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+    </div>
+
+    <div id="tableWrap"></div>
+  </div>
+</div>
+
+<script>
+let db=null,lastColumns=[],lastRows=[];
+
+const SHORTCUTS=[
+  {label:'All results',sql:'SELECT * FROM results LIMIT 100'},
+  {label:'All layouts',sql:'SELECT * FROM layouts LIMIT 100'},
+  {label:'Unique experiments',sql:"SELECT DISTINCT source_file FROM results"},
+  {label:'Sample summary',sql:"SELECT key, COUNT(*) as n, ROUND(AVG(final_concentration_with_dilution),4) as avg_conc FROM results WHERE key NOT LIKE 'Standard%' AND key != '' GROUP BY key ORDER BY avg_conc DESC"},
+  {label:'Standards',sql:"SELECT well, key, concentration, measurement FROM results WHERE key LIKE 'Standard%' ORDER BY concentration"},
+  {label:'Schema',sql:"SELECT name, sql FROM sqlite_master WHERE type='table'"},
+];
+
+async function initDB(){
+  const status=document.getElementById('status');
+  try{
+    const sqlPromise=initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f});
+    const dataPromise=fetch('cfps.db').then(r=>{
+      if(!r.ok)throw new Error('Database file not found (cfps.db). Run build_db.py first.');
+      return r.arrayBuffer();
+    });
+    const[SQL,buf]=await Promise.all([sqlPromise,dataPromise]);
+    db=new SQL.Database(new Uint8Array(buf));
+
+    // Get table list
+    const tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+    const tableNames=tables.length?tables[0].values.map(r=>r[0]):[];
+
+    let totalRows=0;
+    tableNames.forEach(t=>{
+      const c=db.exec('SELECT COUNT(*) FROM "'+t+'"');
+      if(c.length)totalRows+=c[0].values[0][0];
+    });
+
+    status.className='status ready fade-in';
+    status.innerHTML='Database loaded — <span class="tag">'+tableNames.length+' tables</span> <span class="tag">'+totalRows.toLocaleString()+' rows</span>';
+
+    // Table chips
+    const bar=document.getElementById('tablesBar');
+    tableNames.forEach(t=>{
+      const btn=document.createElement('button');
+      btn.className='table-chip';btn.textContent=t;
+      btn.onclick=function(){
+        document.getElementById('queryInput').value='SELECT * FROM "'+t+'" LIMIT 100';
+        runQuery();
+      };
+      bar.appendChild(btn);
+    });
+
+    // Shortcuts
+    const sc=document.getElementById('shortcuts');
+    SHORTCUTS.forEach(s=>{
+      const btn=document.createElement('button');
+      btn.className='shortcut';btn.textContent=s.label;
+      btn.onclick=function(){document.getElementById('queryInput').value=s.sql;runQuery();};
+      sc.appendChild(btn);
+    });
+
+    document.getElementById('mainUI').style.display='block';
+
+    // Auto-run first query
+    runQuery();
+
+  }catch(err){
+    status.className='status error fade-in';
+    status.textContent='Failed to load database: '+err.message;
+  }
+}
+
+function runQuery(){
+  const sql=document.getElementById('queryInput').value.trim();
+  if(!sql||!db)return;
+
+  const wrap=document.getElementById('tableWrap');
+  const info=document.getElementById('resultInfo');
+
+  try{
+    const result=db.exec(sql);
+    if(!result.length){
+      wrap.innerHTML='<div class="empty-state"><div class="icon">∅</div><p>Query returned no results</p></div>';
+      info.style.display='none';
+      lastColumns=[];lastRows=[];
+      return;
+    }
+
+    const cols=result[0].columns;
+    const rows=result[0].values;
+    lastColumns=cols;lastRows=rows;
+
+    document.getElementById('rowCount').innerHTML='<span class="tag">'+rows.length+' rows</span> <span class="tag">'+cols.length+' columns</span>';
+    info.style.display='flex';
+
+    // Detect numeric columns
+    const isNum=cols.map((_,ci)=>rows.length>0&&rows.every(r=>r[ci]===null||typeof r[ci]==='number'));
+
+    let html='<div class="table-wrap" style="max-height:500px;overflow:auto"><table class="data-table"><thead><tr>';
+    cols.forEach(c=>{html+='<th>'+escH(c)+'</th>';});
+    html+='</tr></thead><tbody>';
+    rows.forEach(r=>{
+      html+='<tr>';
+      r.forEach((v,ci)=>{
+        const cls=isNum[ci]?' class="num"':'';
+        const display=v===null?'<span style="color:var(--text3)">NULL</span>':escH(String(v));
+        html+='<td'+cls+'>'+display+'</td>';
+      });
+      html+='</tr>';
+    });
+    html+='</tbody></table></div>';
+    wrap.innerHTML=html;
+
+    // Highlight active table chip
+    document.querySelectorAll('.table-chip').forEach(c=>{
+      const tname=c.textContent;
+      c.classList.toggle('active',sql.toLowerCase().includes('"'+tname.toLowerCase()+'"')||sql.toLowerCase().includes('from '+tname.toLowerCase()));
+    });
+
+  }catch(err){
+    wrap.innerHTML='<div class="status error">'+escH(err.message)+'</div>';
+    info.style.display='none';
+  }
+}
+
+function escH(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function downloadResults(){
+  if(!lastColumns.length)return;
+  let csv=lastColumns.map(c=>'"'+c+'"').join(',')+'\n';
+  lastRows.forEach(r=>{
+    csv+=r.map(v=>v===null?'':'"'+String(v).replace(/"/g,'""')+'"').join(',')+'\n';
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='query_results.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+// Ctrl/Cmd+Enter to run
+document.getElementById('queryInput').addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQuery();}
+});
+
+initDB();
+</script>
+</body>
+</html>

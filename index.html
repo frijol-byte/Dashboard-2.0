@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CFPS Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Mono','SF Mono',monospace;background:#fff;color:#1e293b}
+.nav{display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:8px;padding:0 14px}
+.nav a{padding:8px 16px;font-size:10.5px;font-weight:400;color:#94a3b8;text-decoration:none;border-bottom:2px solid transparent;font-family:inherit;margin-bottom:-1px}
+.nav a.active{font-weight:600;color:#0f172a;border-bottom-color:#2563eb}
+.nav a:hover{color:#475569}
+.zoom-wrap{position:relative;overflow:hidden;border-radius:4px;cursor:grab}
+.zoom-wrap:active{cursor:grabbing}
+.zoom-hint{position:absolute;bottom:2px;right:6px;font-size:8px;color:#c1c9d4;pointer-events:none}
+.home-btn{position:fixed;top:8px;right:160px;z-index:50;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;background:#fff;border:1px solid #d1d5db;color:#64748b;font-size:10px;font-weight:600;text-decoration:none;font-family:inherit;transition:all .2s}
+.home-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+</style>
+</head>
+<body>
+<a class="home-btn" href="index.html"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>Toolkit</a>
+<div id="app"></div>
+<script>
+function odb(){return new Promise(function(r,j){var q=indexedDB.open('cfps',1);q.onupgradeneeded=function(){q.result.createObjectStore('c')};q.onsuccess=function(){r(q.result)};q.onerror=function(){j(q.error)}})}
+function getCSV(){return odb().then(function(db){var tx=db.transaction('c','readonly'),rq=tx.objectStore('c').get('k');return new Promise(function(r){rq.onsuccess=function(){r(rq.result||null)};rq.onerror=function(){r(null)}})}).catch(function(){return null})}
+function parseCSV(text){
+  var lines=text.trim().split('\n');var hdr=lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'').toUpperCase()});var rows=[];
+  for(var i=1;i<lines.length;i++){var vals=lines[i].split(',');var r={};for(var j=0;j<hdr.length;j++)r[hdr[j]]=(vals[j]||'').trim().replace(/"/g,'');rows.push(r)}
+  var all=rows.map(function(r){return{well:r.WELL||'',meas:parseFloat(r.MEASUREMENT)||0,rn:parseInt(r.ROW_NUMBER)||0,rl:r.ROW_LETTER||'',cn:parseInt(r.COLUMN_NUMBER)||0,key:r.KEY||'',lys:r.LYSATE||'',mm:r.MASTER_MIX||'',prod:r.PRODUCT||'',tmpl:r.TEMPLATE||'',op:r.OPERATOR||'',rv:parseFloat(r.REACTION_VOLUME)||0,dil:parseFloat(r.DILUTION)||0,eid:r.EXP_ID||'',tc:r.TEST_CONDITION||'',conc:parseFloat(r.FINAL_CONCENTRATION_WITH_DILUTION)||null,label:r.LABEL||'',vessel:r.VESSEL||'',stdConc:parseFloat(r.CONCENTRATION)||null,calcConc:parseFloat(r.CALCULATED_CONCENTRATION)||null}});
+  var samples=all.filter(function(r){return r.conc!==null&&r.key.indexOf('Standard')<0&&r.key.indexOf('spike-in')<0});
+  var std={};all.forEach(function(r){var isS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;if(isS&&r.stdConc!=null&&isFinite(r.stdConc)){if(!std[r.eid])std[r.eid]=[];std[r.eid].push([r.stdConc,Math.round(r.meas)])}});
+  var spk={};all.forEach(function(r){if(r.key.indexOf('spike-in')>=0&&r.meas>0){if(!spk[r.eid])spk[r.eid]=[];spk[r.eid].push({meas:Math.round(r.meas),dil:r.dil,conc:r.conc,calcConc:r.calcConc})}});
+  var samplePts={};samples.forEach(function(r){if(!samplePts[r.eid])samplePts[r.eid]=[];samplePts[r.eid].push(r.meas)});
+  var plate={};var eids2={};all.forEach(function(r){eids2[r.eid]=1});
+  Object.keys(eids2).sort().forEach(function(e){plate[e]=all.filter(function(r){return r.eid===e}).map(function(r){var iS=r.key.indexOf('Standard')>=0||r.label.indexOf('Standard')>=0;return r.rn+','+r.cn+','+Math.round(r.meas)+(iS?',1':'')}).join(';')});
+  var meta={};var sE={};samples.forEach(function(r){sE[r.eid]=1});
+  Object.keys(sE).sort().forEach(function(e){var sub=samples.filter(function(r){return r.eid===e});var ops={},lys={},tms={},vols={};sub.forEach(function(r){if(r.op)ops[r.op]=1;if(r.lys)lys[r.lys]=1;if(r.tmpl)tms[r.tmpl]=1;if(r.rv)vols[r.rv]=1});meta[e]={o:Object.keys(ops),l:Object.keys(lys),t:Object.keys(tms),v:Object.keys(vols).map(Number).sort(function(a,b){return a-b}),n:sub.length}});
+  return{samples:samples,std:std,spk:spk,samplePts:samplePts,plate:plate,meta:meta}
+}
+getCSV().then(function(c){
+  if(c){window.__CSV=c.csv;window.PARSED=parseCSV(window.__CSV);window.dispatchEvent(new CustomEvent('data-ready'))}
+  else{window.location.href='load.html'}
+});
+</script>
+<script type="text/babel">
+const{useState,useMemo,useRef,useCallback,useEffect}=React;
+function Q(a,q){if(!a||!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const p=(s.length-1)*q;const lo=Math.floor(p),hi=Math.ceil(p);return lo===hi?s[lo]:s[lo]+(p-lo)*(s[hi]-s[lo]);}
+function mn(a){return a&&a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function stdev(a){if(!a||a.length<2)return 0;const m=mn(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
+function iqrClean(v){if(!v||v.length<4)return v||[];const q1=Q(v,.25),q3=Q(v,.75),r=q3-q1;return v.filter(x=>x>=q1-1.5*r&&x<=q3+1.5*r);}
+function fmtN(v){if(!isFinite(v))return"0";return v>=1e3?(v/1e3).toFixed(1)+"k":v.toFixed(0);}
+const PAL=["#2563eb","#d97706","#059669","#dc2626","#7c3aed","#db2777","#0891b2","#65a30d","#ea580c","#4f46e5","#a855f7","#14b8a6"];
+const CM={Premium:"#2563eb",Economy:"#d97706",Ready96:"#059669",control:"#64748b",neg:"#9ca3af","12-l neg ctrl":"#9ca3af",IB:"#db2777",JC:"#7c3aed",RK:"#0891b2","12-L":"#dc2626","15-L":"#ea580c","17-L":"#2563eb","20-L":"#059669","21-L":"#7c3aed","Arbor lysate":"#db2777",plasmid:"#2563eb",linear:"#d97706","5":"#db2777","10":"#2563eb","20":"#059669"};
+const gc=k=>CM[k]||CM[String(k)]||CM[String(parseFloat(k))]||"#6b7280";
+const gL=(r,b)=>{if(!r)return"";if(b==="lysate_mm")return(r.lys||"")+"/"+(r.mm||"");if(b==="product")return r.prod||"";if(b==="lysate")return r.lys||"";if(b==="rxn_vol")return(r.rv||0)+"µL";if(b==="template")return r.tmpl||"";if(b==="master_mix")return r.mm||"";if(b==="operator")return r.op||"";if(b==="test_cond")return r.tc||"";if(b==="experiment")return r.eid||"";return r.lys||"";};
+const GO=[["product","Product"],["lysate","Lysate"],["operator","Operator"],["template","Template"],["rxn_vol","Rxn Vol"],["test_cond","Test Cond"],["master_mix","Master Mix"],["lysate_mm","Lys/MM"]];
+const PO=[...GO,["experiment","Experiment"],["key","Key"],["vessel","Vessel"]];
+const PR="ABCDEFGHIJKLMNOP".split("");const PC=Array.from({length:24},(_,i)=>i+1);
+const sty={pn:{background:"#fff",borderRadius:5,border:"1px solid #e2e8f0",padding:"8px 10px",overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.04)"},pt:{fontSize:10.5,fontWeight:600,color:"#0f172a",marginBottom:4,display:"flex",alignItems:"center",gap:5},dt:c=>({display:"inline-block",width:6,height:6,borderRadius:"50%",background:c,flexShrink:0}),sl:{background:"#f8fafc",border:"1px solid #d1d5db",color:"#1e293b",borderRadius:3,padding:"2px 5px",fontSize:10,fontFamily:"inherit",cursor:"pointer",outline:"none"},th:{padding:"4px 5px",borderBottom:"1px solid #e2e8f0",color:"#64748b",textAlign:"left",fontWeight:600,textTransform:"uppercase",letterSpacing:".04em",fontSize:8.5,background:"#fff"},td:{padding:"3px 5px",borderBottom:"1px solid #f1f5f9"},tn:{padding:"3px 5px",borderBottom:"1px solid #f1f5f9",textAlign:"right",fontVariantNumeric:"tabular-nums"},bt:{fontSize:9,color:"#64748b",background:"#f8fafc",border:"1px solid #d1d5db",borderRadius:3,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"},fb:{background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",padding:"6px 8px",marginBottom:6,display:"flex",flexDirection:"column",gap:3}};
+function Tip({x,y,children}){if(!children)return null;return<div style={{position:"fixed",left:Math.min(x+14,window.innerWidth-300),top:y-8,background:"#1e293b",color:"#f1f5f9",padding:"5px 9px",borderRadius:5,fontSize:10.5,pointerEvents:"none",zIndex:999,maxWidth:300,lineHeight:1.4,boxShadow:"0 4px 14px rgba(0,0,0,.35)",border:"1px solid #334155",fontFamily:"inherit",whiteSpace:"pre-line"}}>{children}</div>;}
+function Ch({label,options,selected,onChange,colorFn,formatFn}){const a=selected.length===options.length;return<div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}><span style={{fontSize:8.5,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",width:56,flexShrink:0,textAlign:"right",fontWeight:600}}>{label}</span><button onClick={()=>onChange(a?[options[0]]:options)} style={{fontSize:8,padding:"1px 5px",borderRadius:3,border:"1px solid #d1d5db",cursor:"pointer",fontFamily:"inherit",background:a?"#e2e8f0":"transparent",color:a?"#1e293b":"#94a3b8"}}>ALL</button>{options.map(o=>{const on=selected.includes(o);const c=colorFn?colorFn(o):"#2563eb";return<button key={String(o)} onClick={()=>{const n=on?selected.filter(x=>x!==o):[...selected,o];onChange(n.length?n:[o]);}} style={{fontSize:8.5,padding:"1px 6px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?c+"66":"#d1d5db"),background:on?c+"14":"transparent",color:on?"#1e293b":"#94a3b8"}}>{formatFn?formatFn(o):String(o)}</button>;})}</div>;}
+function GS({g,sg,s,ss}){return<div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>Group:</span><select style={sty.sl} value={g} onChange={e=>sg(e.target.value)}>{GO.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div><div style={{display:"flex",alignItems:"center",gap:3}}><span style={{fontSize:8,color:"#64748b",fontWeight:600}}>+Sub:</span><select style={sty.sl} value={s} onChange={e=>ss(e.target.value)}><option value="none">None</option>{GO.filter(([k])=>k!==g).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div></div>;}
+function Zoomable({children,width,height}){const[sc,setSc]=useState(1);const[tx,setTx]=useState(0);const[ty,setTy]=useState(0);const[drag,setDrag]=useState(false);const[ds,setDs]=useState(null);const ref=useRef(null);const onW=useCallback(e=>{e.preventDefault();setSc(s=>Math.min(8,Math.max(.5,s*(e.deltaY>0?.9:1.1))));},[]);useEffect(()=>{const el=ref.current;if(el)el.addEventListener('wheel',onW,{passive:false});return()=>{if(el)el.removeEventListener('wheel',onW)};},[onW]);return<div ref={ref} className="zoom-wrap" style={{width:width||"100%",height:height||"auto"}} onMouseDown={e=>{if(e.button===0){setDrag(true);setDs({x:e.clientX-tx,y:e.clientY-ty})}}} onMouseMove={e=>{if(drag&&ds){setTx(e.clientX-ds.x);setTy(e.clientY-ds.y)}}} onMouseUp={()=>{setDrag(false);setDs(null)}} onMouseLeave={()=>{setDrag(false);setDs(null)}} onDoubleClick={()=>{setSc(1);setTx(0);setTy(0)}}><div style={{transform:"translate("+tx+"px,"+ty+"px) scale("+sc+")",transformOrigin:"0 0",transition:drag?"none":"transform 0.1s"}}>{children}</div>{sc!==1&&<span className="zoom-hint">{Math.round(sc*100)+"% dblclick reset"}</span>}</div>;}
+// Shared filter + header wrapper
+function PageWrap({data,activePage,children}){
+  const{samples}=data;
+  const eids=useMemo(()=>{const s={};samples.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[samples]);
+  const allLys=useMemo(()=>{const s={};samples.forEach(r=>{if(r.lys)s[r.lys]=1});return Object.keys(s).sort();},[samples]);
+  const allMM=useMemo(()=>{const s={};samples.forEach(r=>{if(r.mm)s[r.mm]=1});return Object.keys(s).sort();},[samples]);
+  const allProd=useMemo(()=>{const s={};samples.forEach(r=>{if(r.prod)s[r.prod]=1});return Object.keys(s).sort();},[samples]);
+  const allTmpl=useMemo(()=>{const s={};samples.forEach(r=>{if(r.tmpl)s[r.tmpl]=1});return Object.keys(s).sort();},[samples]);
+  const allOp=useMemo(()=>{const s={};samples.forEach(r=>{if(r.op)s[r.op]=1});return Object.keys(s).sort();},[samples]);
+  const allRV=useMemo(()=>{const s={};samples.forEach(r=>{if(r.rv)s[r.rv]=1});return Object.keys(s).map(Number).sort((a,b)=>a-b);},[samples]);
+  const allTC=useMemo(()=>{const s={};samples.forEach(r=>{if(r.tc)s[r.tc]=1});return Object.keys(s).sort();},[samples]);
+  const[fE,sfE]=useState(eids);const[fL,sfL]=useState(allLys);const[fM,sfM]=useState(allMM);
+  const[fP,sfP]=useState(()=>allProd.filter(p=>p!=="neg"&&p!=="12-l neg ctrl"));
+  const[fT,sfT]=useState(allTmpl);const[fO,sfO]=useState(allOp);const[fR,sfR]=useState(allRV);const[fC,sfC]=useState(allTC);
+  const[shF,sShF]=useState(true);
+  const fd=useMemo(()=>samples.filter(r=>fE.indexOf(r.eid)>=0&&fL.indexOf(r.lys)>=0&&fM.indexOf(r.mm)>=0&&fP.indexOf(r.prod)>=0&&fT.indexOf(r.tmpl)>=0&&fO.indexOf(r.op)>=0&&fR.indexOf(r.rv)>=0&&(r.tc===""||fC.indexOf(r.tc)>=0)),[samples,fE,fL,fM,fP,fT,fO,fR,fC]);
+  const cl=useMemo(()=>iqrClean(fd.map(r=>r.conc)),[fd]);
+  const kp={n:fd.length,m:cl.length?mn(cl):0,md:cl.length?Q(cl,.5):0,cv:cl.length&&mn(cl)?stdev(cl)/mn(cl)*100:0,ex:(()=>{const s={};fd.forEach(r=>{s[r.eid]=1});return Object.keys(s).length;})(),o:fd.length-cl.length};
+  const pages=[{k:"load",l:"📂 Load Data",href:"load.html"},{k:"index",l:"📊 Overview",href:"dashboard.html"},{k:"curves",l:"🔬 Curves & Lots",href:"curves.html"},{k:"experiment",l:"🧪 Experiment",href:"experiment.html"},{k:"raw",l:"📋 Raw Data",href:"raw.html"},{k:"repro",l:"🔄 Reproducibility",href:"repro.html"}];
+  return<div style={{fontFamily:"'IBM Plex Mono','SF Mono',monospace",background:"#fff",color:"#1e293b",minHeight:"100vh",padding:"10px 14px",fontSize:11}}>
+    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",borderBottom:"1px solid #e2e8f0",paddingBottom:6}}><div><div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>CFPS Dashboard</div><div style={{fontSize:10,color:"#64748b"}}>Cell-Free Protein Synthesis · Multi-experiment</div></div><div style={{display:"flex",gap:6}}><span style={{fontSize:9,color:"#059669",background:"#f8fafc",padding:"2px 7px",borderRadius:8,border:"1px solid #05966933"}}>{fd.length+"/"+samples.length}</span><span style={{fontSize:9,color:"#d97706",background:"#f8fafc",padding:"2px 7px",borderRadius:8,border:"1px solid #d9770633"}}>{kp.ex+" exp"}</span></div></div>
+    <div className="nav">{pages.map(p=><a key={p.k} href={p.href} className={activePage===p.k?"active":""}>{p.l}</a>)}</div>
+    <div style={{marginBottom:6}}><button onClick={()=>sShF(!shF)} style={{...sty.bt,marginBottom:4}}>{(shF?"▾":"▸")+" Filters ("+fd.length+")"}</button>{shF&&<div style={sty.fb}><Ch label="Exp ID" options={eids} selected={fE} onChange={sfE}/><Ch label="Template" options={allTmpl} selected={fT} onChange={sfT} colorFn={gc}/><Ch label="Rxn Vol" options={allRV} selected={fR} onChange={sfR} colorFn={v=>gc(String(v))} formatFn={v=>v+"µL"}/><Ch label="Lysate" options={allLys} selected={fL} onChange={sfL} colorFn={gc}/><Ch label="Master Mix" options={allMM} selected={fM} onChange={sfM}/><Ch label="Product" options={allProd} selected={fP} onChange={sfP} colorFn={gc}/><Ch label="Operator" options={allOp} selected={fO} onChange={sfO} colorFn={gc}/><Ch label="Test Cond" options={allTC} selected={fC} onChange={sfC}/></div>}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:5,marginBottom:6}}>{[["#2563eb",kp.n,"Filtered"],["#059669",isFinite(kp.m)?kp.m.toFixed(0):"0","Mean mg/L"],["#d97706",isFinite(kp.md)?kp.md.toFixed(0):"0","Median"],["#7c3aed",isFinite(kp.cv)?kp.cv.toFixed(1)+"%":"0%","CV%"],["#0891b2",kp.ex,"Experiments"],["#dc2626",kp.o,"Outliers"]].map((a,i)=><div key={i} style={{background:"#f8fafc",borderRadius:5,padding:"5px 8px",borderLeft:"3px solid "+a[0],border:"1px solid #e2e8f0",borderLeftColor:a[0]}}><div style={{fontSize:17,fontWeight:700,color:"#0f172a",lineHeight:1.2}}>{a[1]}</div><div style={{fontSize:8,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginTop:1}}>{a[2]}</div></div>)}</div>
+    {children({fd,data})}
+  </div>;
+}
+function AppWrap({activePage,renderContent}){
+  const[data,setData]=useState(null);
+  useEffect(()=>{function h(){if(window.PARSED)setData(window.PARSED);}window.addEventListener('data-ready',h);if(window.PARSED)setData(window.PARSED);return()=>window.removeEventListener('data-ready',h);},[]);
+  if(!data)return<div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>Waiting for data...</div>;
+  return<PageWrap data={data} activePage={activePage}>{({fd,data:d})=>renderContent({fd,data:d})}</PageWrap>;
+}
+
+function ExperimentDeepDive({fd, data}){
+  const{std,spk,samplePts,plate,meta}=data;
+  const allEids=useMemo(()=>{const s={};fd.forEach(r=>{s[r.eid]=1});return Object.keys(s).sort();},[fd]);
+  const[eid,setEid]=useState(allEids[0]||"");
+  useEffect(()=>{if(allEids.length&&allEids.indexOf(eid)<0)setEid(allEids[0]);},[allEids,eid]);
+  const[tip,setTip]=useState(null);
+
+  const expSamples=useMemo(()=>fd.filter(r=>r.eid===eid),[fd,eid]);
+  const expMeta=meta[eid]||{o:[],l:[],t:[],v:[],n:0};
+
+  // ── Main chart: group/subgroup selectors ──
+  const[mG,setMG]=useState("product");
+  const[mS,setMS]=useState("none");
+
+  const mainGroups=useMemo(()=>{
+    const g={};
+    expSamples.forEach(r=>{
+      const p=gL(r,mG),s2=mS!=="none"?gL(r,mS):null;
+      const label=s2?p+" · "+s2:p;
+      if(!label)return;
+      if(!g[label])g[label]=[];
+      g[label].push(r.conc);
+    });
+    const o={};Object.keys(g).sort((a,b)=>{const pa=a.split(" · "),pb=b.split(" · ");return pa[0].localeCompare(pb[0])||(pa[1]||"").localeCompare(pb[1]||"");}).forEach(k=>{o[k]=g[k]});
+    return o;
+  },[expSamples,mG,mS]);
+
+  const mainColorFn=useMemo(()=>{
+    if(mS==="none")return k=>gc(k.replace("µL",""));
+    const ps={};Object.keys(mainGroups).forEach(k=>{ps[k.split(" · ")[0]]=1});
+    const pks=Object.keys(ps).sort(),pc={};pks.forEach((p,i)=>{pc[p]=PAL[i%PAL.length]});
+    return k=>pc[k.split(" · ")[0]]||"#6b7280";
+  },[mainGroups,mS]);
+
+  // ── Summary stats from main grouping ──
+  const summaryRows=useMemo(()=>Object.keys(mainGroups).map(k=>{
+    const v=mainGroups[k],c=iqrClean(v),m2=c.length?mn(c):0,s2=c.length>1?stdev(c):0;
+    return{k,n:v.length,nc:c.length,out:v.length-c.length,m:m2,md:c.length?Q(c,.5):0,s:s2,cv:m2?s2/m2*100:0};
+  }).sort((a,b)=>b.m-a.m),[mainGroups]);
+
+  // ── Main mean+SD chart ──
+  function MeanChart({groups,colorFn,width,height}){
+    const W=width||600,H=height||250;
+    const pad={t:16,r:16,b:50,l:56},iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+    const ks=Object.keys(groups);
+    const stats=useMemo(()=>ks.map(k=>{
+      const v=groups[k],c=iqrClean(v),m2=c.length?mn(c):0,s2=c.length>1?stdev(c):0;
+      return{k,vals:v,mean:m2,sd:s2,n:v.length};
+    }),[groups,ks]);
+    const maxV=useMemo(()=>Math.max(...stats.map(s=>s.mean+s.sd),100)*1.12,[stats]);
+    const yS=useMemo(()=>d3.scaleLinear().domain([0,maxV]).range([ih,0]),[maxV,ih]);
+    const xS=useMemo(()=>d3.scaleBand().domain(ks).range([0,iw]).padding(.25),[ks,iw]);
+    const jit=(i,bw)=>bw*.1+((i*7+3)%19)/19*bw*.8;
+    return<Zoomable width={W} height={H}><svg width={W} height={H} style={{display:"block"}}><g transform={"translate("+pad.l+","+pad.t+")"}>
+      {yS.ticks(5).map(t=><g key={t}><line x1={0} x2={iw} y1={yS(t)} y2={yS(t)} stroke="#e2e8f0"/><text x={-6} y={yS(t)} dy={3} textAnchor="end" fill="#64748b" fontSize={8.5} fontFamily="inherit">{fmtN(t)}</text></g>)}
+      <text transform={"translate(-44,"+ih/2+") rotate(-90)"} textAnchor="middle" fill="#64748b" fontSize={9} fontFamily="inherit">Concentration (mg/L)</text>
+      {stats.map(s=>{
+        const x=xS(s.k),bw=xS.bandwidth(),cx=x+bw/2,col=colorFn?colorFn(s.k):"#2563eb";
+        return<g key={s.k}>
+          {/* SD bar */}
+          <line x1={cx} x2={cx} y1={yS(Math.min(maxV,s.mean+s.sd))} y2={yS(Math.max(0,s.mean-s.sd))} stroke={col} strokeWidth={2} strokeOpacity={.3}/>
+          <line x1={cx-6} x2={cx+6} y1={yS(Math.min(maxV,s.mean+s.sd))} y2={yS(Math.min(maxV,s.mean+s.sd))} stroke={col} strokeWidth={1.5} strokeOpacity={.3}/>
+          <line x1={cx-6} x2={cx+6} y1={yS(Math.max(0,s.mean-s.sd))} y2={yS(Math.max(0,s.mean-s.sd))} stroke={col} strokeWidth={1.5} strokeOpacity={.3}/>
+          {/* Individual data points */}
+          {s.vals.map((v,i)=><circle key={i} cx={x+jit(i,bw)} cy={yS(v)} r={2} fill={col} fillOpacity={.2}
+            onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:s.k+"\n"+v+" mg/L"})} onMouseLeave={()=>setTip(null)}/>)}
+          {/* Mean dot (large) */}
+          <circle cx={cx} cy={yS(s.mean)} r={7} fill={col} stroke="#fff" strokeWidth={2}
+            onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:s.k+"\nMean: "+s.mean.toFixed(0)+" ± "+s.sd.toFixed(0)+" mg/L\nn="+s.n})}
+            onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>
+          {/* Label */}
+          <text x={cx} y={ih+14} textAnchor="middle" fill="#475569" fontSize={Math.min(9,Math.max(6,500/ks.length/Math.max(...ks.map(k=>k.length),1)*3))} fontFamily="inherit">
+            {s.k.length>20?s.k.slice(0,18)+"…":s.k}
+          </text>
+          <text x={cx} y={ih+26} textAnchor="middle" fill="#94a3b8" fontSize={7} fontFamily="inherit">{"n="+s.n}</text>
+        </g>;
+      })}
+    </g></svg></Zoomable>;
+  }
+
+  // ── Plate heatmap ──
+  const wells=useMemo(()=>{const str=plate[eid];if(!str)return[];return str.split(";").map(x=>{const p=x.split(",");return{r:+p[0],c:+p[1],m:+p[2],s:p[3]==="1"};});},[plate,eid]);
+  const wellMap=useMemo(()=>{const m={};wells.forEach(w=>{m[w.r+"-"+w.c]=w});return m;},[wells]);
+  const heatExt=useMemo(()=>{const n=wells.filter(w=>!w.s).map(w=>w.m);return[d3.min(n)||0,d3.max(n)||400];},[wells]);
+  const heatCS=useMemo(()=>d3.scaleSequential(d3.interpolateViridis).domain(heatExt),[heatExt]);
+  const stdN=wells.filter(w=>w.s).length;
+
+  // ── Standard curve ──
+  const stdPts=useMemo(()=>(std[eid]||[]).filter(p=>Array.isArray(p)&&p.length>=2&&isFinite(p[0])&&isFinite(p[1])),[std,eid]);
+  const fit=useMemo(()=>{
+    if(stdPts.length<2)return{slope:0,inter:0,r2:0};
+    const xs=stdPts.map(p=>p[0]),ys=stdPts.map(p=>p[1]),n=xs.length;
+    let sx=0,sy=0,sxx=0,sxy=0;for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];sxx+=xs[i]*xs[i];sxy+=xs[i]*ys[i];}
+    const den=n*sxx-sx*sx;if(Math.abs(den)<1e-10)return{slope:0,inter:0,r2:0};
+    const sl=(n*sxy-sx*sy)/den,it=(sy-sl*sx)/n,ym=sy/n;let ssT=0,ssR=0;
+    for(let i=0;i<n;i++){ssT+=(ys[i]-ym)**2;ssR+=(ys[i]-(sl*xs[i]+it))**2;}
+    return{slope:+sl.toFixed(2),inter:+it.toFixed(2),r2:ssT>0?+((1-ssR/ssT).toFixed(4)):0};
+  },[stdPts]);
+  const spikes2=useMemo(()=>(spk[eid]||[]).map(s=>({...s,xC:fit.slope>0?Math.max(0,(s.meas-fit.inter)/fit.slope):0})),[spk,eid,fit]);
+  const sampMeas=samplePts[eid]||[];
+  const sampX=useMemo(()=>fit.slope>0?sampMeas.map(m=>({meas:m,x:Math.max(0,(m-fit.inter)/fit.slope)})):[]  ,[sampMeas,fit]);
+  const ok=fit.r2>=.99,wn=fit.r2>=.98;
+  const CW=380,CH=200,cpad={t:10,r:10,b:26,l:40},ciw=CW-cpad.l-cpad.r,cih=CH-cpad.t-cpad.b;
+  const cxMax=stdPts.length?Math.max(...stdPts.map(p=>p[0]))*1.05:128;
+  const cyMax=Math.max(...[...stdPts.map(p=>p[1]),...spikes2.map(s=>s.meas),...sampMeas],100)*1.08;
+  const cxS=d3.scaleLinear().domain([0,cxMax]).range([0,ciw]);
+  const cyS=d3.scaleLinear().domain([0,cyMax]).range([cih,0]);
+
+  // ── Edge effects ──
+  const rowStats=useMemo(()=>{const g={};expSamples.forEach(r=>{const k=r.rl||("R"+r.rn);if(!g[k])g[k]=[];g[k].push(r.conc);});return Object.keys(g).sort().map(k=>({row:k,mean:mn(g[k]),n:g[k].length}));},[expSamples]);
+  const colStats=useMemo(()=>{const g={};expSamples.forEach(r=>{const k=String(r.cn);if(!g[k])g[k]=[];g[k].push(r.conc);});return Object.keys(g).sort((a,b)=>Number(a)-Number(b)).map(k=>({col:k,mean:mn(g[k]),n:g[k].length}));},[expSamples]);
+
+  // ── Well table ──
+  const[search,setSearch]=useState("");const[sortK,setSortK]=useState("well");const[sortD,setSortD]=useState(1);const[pg,sPg]=useState(0);const PP=25;
+  const wCols=[{k:"well",l:"Well",w:45},{k:"key",l:"Key",w:95},{k:"prod",l:"Product",w:55},{k:"tmpl",l:"Tmpl",w:50},{k:"lys",l:"Lysate",w:55},{k:"mm",l:"MM",w:65},{k:"rv",l:"Vol",w:30,nm:1},{k:"tc",l:"Test Cond",w:100},{k:"meas",l:"RFU",w:45,nm:1},{k:"conc",l:"mg/L",w:60,nm:1}];
+  const wRows=useMemo(()=>{let r=expSamples;if(search){const s=search.toLowerCase();r=r.filter(row=>wCols.some(c=>String(row[c.k]||"").toLowerCase().includes(s)));}return r.slice().sort((a,b)=>{const c=wCols.find(x=>x.k===sortK);return(c&&c.nm?(Number(a[sortK]||0)-Number(b[sortK]||0)):String(a[sortK]||"").localeCompare(String(b[sortK]||"")))*sortD;});},[expSamples,search,sortK,sortD]);
+  const wPaged=wRows.slice(pg*PP,(pg+1)*PP);const tPg=Math.max(1,Math.ceil(wRows.length/PP));
+  const doSort=k=>{if(sortK===k)setSortD(d=>d*-1);else{setSortK(k);setSortD(k==="conc"||k==="meas"?-1:1);}sPg(0);};
+  const doExport=()=>{const h=wCols.map(c=>c.l).join(","),rs=wRows.map(r=>wCols.map(c=>String(r[c.k]!=null?r[c.k]:"")).join(","));const b=new Blob([h+"\n"+rs.join("\n")],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=eid+"_wells.csv";a.click();URL.revokeObjectURL(u);};
+
+  // ── Bar helper ──
+  function BarChart({items,lk,vk,width,height,color}){
+    const W=width||280,H=height||120,pad={t:6,r:8,b:24,l:44},iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+    const maxV=Math.max(...items.map(d=>d[vk]),100);
+    const yS2=d3.scaleLinear().domain([0,maxV*1.1]).range([ih,0]);
+    const xS2=d3.scaleBand().domain(items.map(d=>d[lk])).range([0,iw]).padding(.15);
+    return<Zoomable width={W} height={H}><svg width={W} height={H} style={{display:"block"}}><g transform={"translate("+pad.l+","+pad.t+")"}>
+      {yS2.ticks(3).map(t=><g key={t}><line x1={0} x2={iw} y1={yS2(t)} y2={yS2(t)} stroke="#e2e8f0"/><text x={-4} y={yS2(t)} dy={3} textAnchor="end" fill="#94a3b8" fontSize={6.5}>{fmtN(t)}</text></g>)}
+      {items.map(d=><g key={d[lk]}><rect x={xS2(d[lk])} y={yS2(d[vk])} width={xS2.bandwidth()} height={Math.max(0,ih-yS2(d[vk]))} fill={color||"#2563eb"} fillOpacity={.5} rx={2} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:d[lk]+": "+d[vk].toFixed(0)+" mg/L (n="+d.n+")"})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/><text x={xS2(d[lk])+xS2.bandwidth()/2} y={ih+12} textAnchor="middle" fill="#64748b" fontSize={6.5}>{d[lk]}</text></g>)}
+    </g></svg></Zoomable>;
+  }
+
+  const z=17;
+
+  return<div>
+    {tip&&<Tip x={tip.x} y={tip.y}>{tip.c}</Tip>}
+
+    {/* Experiment selector + metadata */}
+    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:9,color:"#64748b",fontWeight:600}}>EXPERIMENT:</span>
+        <select style={{...sty.sl,fontSize:13,fontWeight:700,padding:"4px 10px"}} value={eid} onChange={e=>{setEid(e.target.value);sPg(0);setSearch("");}}>
+          {allEids.map(e=><option key={e} value={e}>{e}</option>)}
+        </select>
+      </div>
+      <div style={{display:"flex",gap:12,fontSize:9.5,color:"#475569",flexWrap:"wrap"}}>
+        <span><b>Op:</b> {expMeta.o.join(", ")||"—"}</span>
+        <span><b>Lys:</b> {expMeta.l.join(", ")||"—"}</span>
+        <span><b>Tmpl:</b> {expMeta.t.join(", ")||"—"}</span>
+        <span><b>Vol:</b> {expMeta.v.join("/")+"µL"||"—"}</span>
+        <span><b>n=</b>{expSamples.length}</span>
+      </div>
+    </div>
+
+    {/* ── ROW 1: Mean+SD chart + Summary table ── */}
+    <div style={{display:"grid",gap:6,marginBottom:6,gridTemplateColumns:"1.4fr 0.6fr"}}>
+      <div style={sty.pn}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:4}}>
+          <div style={sty.pt}><span style={sty.dt("#2563eb")}/>Concentration by Group</div>
+          <GS g={mG} sg={setMG} s={mS} ss={setMS}/>
+        </div>
+        <div style={{fontSize:8,color:"#94a3b8",marginBottom:4}}>Large dot = mean · bars = ±1 SD · small dots = individual wells</div>
+        <MeanChart groups={mainGroups} colorFn={mainColorFn} width={580} height={240}/>
+      </div>
+      <div style={{...sty.pn,display:"flex",flexDirection:"column"}}>
+        <div style={sty.pt}><span style={sty.dt("#d97706")}/>Summary Stats</div>
+        <div style={{overflowX:"auto",flex:1,maxHeight:280,overflowY:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}>
+            <thead><tr><th style={sty.th}>Group</th><th style={{...sty.th,textAlign:"right"}}>n</th><th style={{...sty.th,textAlign:"right"}}>Mean</th><th style={{...sty.th,textAlign:"right"}}>SD</th><th style={{...sty.th,textAlign:"right"}}>CV%</th></tr></thead>
+            <tbody>{summaryRows.map(r=><tr key={r.k}>
+              <td style={{...sty.td,display:"flex",alignItems:"center",gap:3}}><span style={sty.dt(mainColorFn(r.k))}/><span style={{fontSize:9}}>{r.k}</span></td>
+              <td style={sty.tn}>{r.nc}{r.out?<span style={{color:"#dc2626",fontSize:8}}>{" -"+r.out}</span>:null}</td>
+              <td style={sty.tn}>{r.m.toFixed(0)}</td><td style={sty.tn}>{r.s.toFixed(0)}</td>
+              <td style={{...sty.tn,color:r.cv>30?"#dc2626":r.cv>15?"#d97706":"#059669",fontWeight:600}}>{r.cv.toFixed(1)+"%"}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <div style={{marginTop:5,borderTop:"1px solid #e2e8f0",paddingTop:5}}>
+          <div style={{fontSize:8,color:"#64748b",textTransform:"uppercase",marginBottom:3,fontWeight:600}}>Relative Yield</div>
+          <div style={{maxHeight:100,overflowY:"auto"}}>{summaryRows.map(r=>{const mx=Math.max(...summaryRows.map(x=>x.m),1);return<div key={r.k} style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><span style={{width:75,fontSize:7,color:"#64748b",textAlign:"right",flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.k}</span><div style={{flex:1,height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}><div style={{width:(r.m/mx*100)+"%",height:"100%",borderRadius:3,background:"linear-gradient(90deg,"+mainColorFn(r.k)+"66,"+mainColorFn(r.k)+")"}}/></div><span style={{fontSize:7.5,color:"#1e293b",width:32,textAlign:"right",fontWeight:500}}>{r.m.toFixed(0)}</span></div>;})}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* ── ROW 2: Plate + Std curve ── */}
+    <div style={{display:"grid",gap:6,marginBottom:6,gridTemplateColumns:"1fr 1fr"}}>
+      <div style={sty.pn}>
+        <div style={sty.pt}><span style={sty.dt("#059669")}/>Plate Heatmap <span style={{fontSize:8,color:"#94a3b8",fontWeight:400}}>{"("+stdN+" std dimmed)"}</span></div>
+        <Zoomable width={24*z+28} height={16*z+28}><svg width={24*z+28} height={16*z+28} style={{display:"block"}}><g transform="translate(18,12)">
+          {PC.map(c=><text key={c} x={(c-1)*z+z/2} y={-2} textAnchor="middle" fill="#94a3b8" fontSize={6}>{c}</text>)}
+          {PR.map((r,ri)=><g key={r}><text x={-3} y={ri*z+z/2+3} textAnchor="end" fill="#94a3b8" fontSize={6.5}>{r}</text>
+            {PC.map(c=>{const w=wellMap[(ri+1)+"-"+c];const v=w?w.m:null;return<rect key={c} x={(c-1)*z} y={ri*z} width={z-1} height={z-1} fill={v!=null?(w.s?"#f0e6f6":heatCS(Math.min(Math.max(v,heatExt[0]),heatExt[1]))):"#f8fafc"} rx={1.5} stroke={w&&w.s?"#c084fc":"#e2e8f0"} strokeWidth={w&&w.s?1.2:.4} style={{cursor:"pointer"}} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:w?PR[ri]+c+(w.s?" ⬡STD":"")+"\n"+Math.round(v)+" RFU":PR[ri]+c})} onMouseLeave={()=>setTip(null)}/>;})}</g>)}
+          <defs><linearGradient id="hg3">{[0,.25,.5,.75,1].map(t=><stop key={t} offset={t*100+"%"} stopColor={d3.interpolateViridis(t)}/>)}</linearGradient></defs>
+          <rect x={0} y={16*z+4} width={140} height={5} fill="url(#hg3)" rx={2}/><text x={0} y={16*z+2} fill="#94a3b8" fontSize={6}>{heatExt[0]}</text><text x={140} y={16*z+2} fill="#94a3b8" fontSize={6} textAnchor="end">{heatExt[1]}</text>
+        </g></svg></Zoomable>
+      </div>
+      <div style={sty.pn}>
+        <div style={sty.pt}><span style={sty.dt("#2563eb")}/>Standard Curve <span style={{fontWeight:400,fontSize:9,color:ok?"#059669":wn?"#d97706":"#dc2626",marginLeft:4}}>{"R²="+fit.r2}</span></div>
+        {stdPts.length<2?<div style={{color:"#94a3b8",fontSize:10,padding:20,textAlign:"center"}}>No standard data for {eid}</div>:
+        <Zoomable width={CW} height={CH}><svg width={CW} height={CH}><g transform={"translate("+cpad.l+","+cpad.t+")"}>
+          {cyS.ticks(5).map(t=><g key={t}><line x1={0} x2={ciw} y1={cyS(t)} y2={cyS(t)} stroke="#e2e8f0"/><text x={-4} y={cyS(t)} dy={3} textAnchor="end" fill="#94a3b8" fontSize={7}>{t>=1e3?Math.round(t/1e3)+"k":Math.round(t)}</text></g>)}
+          {cxS.ticks(5).map(t=><text key={t} x={cxS(t)} y={cih+14} textAnchor="middle" fill="#94a3b8" fontSize={7}>{Math.round(t)}</text>)}
+          {fit.slope>0&&<line x1={cxS(0)} y1={cyS(fit.inter)} x2={cxS(cxMax)} y2={cyS(fit.slope*cxMax+fit.inter)} stroke="#2563eb" strokeWidth={1.5} strokeOpacity={.35} strokeDasharray="4,3"/>}
+          {sampX.map((s,i)=>{const cx=cxS(Math.min(s.x,cxMax)),cy=cyS(s.meas);if(!isFinite(cx)||!isFinite(cy))return null;return<g key={"x"+i}><line x1={cx-2} y1={cy-2} x2={cx+2} y2={cy+2} stroke="#64748b" strokeWidth={1} strokeOpacity={.3}/><line x1={cx+2} y1={cy-2} x2={cx-2} y2={cy+2} stroke="#64748b" strokeWidth={1} strokeOpacity={.3}/></g>;})}
+          {stdPts.map((p,i)=><circle key={"s"+i} cx={cxS(p[0])} cy={cyS(p[1])} r={4} fill="#2563eb" fillOpacity={.7} stroke="#fff" strokeWidth={.5} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:"Standard\nKnown: "+p[0]+" µg/mL\nMeas: "+p[1]+" RFU"})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>)}
+          {spikes2.map((s,i)=><circle key={"sp"+i} cx={cxS(Math.min(s.xC,cxMax))} cy={cyS(s.meas)} r={4} fill="#f59e0b" fillOpacity={.8} stroke="#fff" strokeWidth={.5} onMouseMove={e=>setTip({x:e.clientX,y:e.clientY,c:"Spike-in\nMeas: "+s.meas+" RFU\nDil: "+s.dil+"×"+(s.conc!=null?"\nFinal: "+s.conc.toFixed(0)+" mg/L":"")})} onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>)}
+          <text x={ciw/2} y={cih+22} textAnchor="middle" fill="#94a3b8" fontSize={7}>Conc (µg/mL)</text>
+          <text transform={"translate(-32,"+cih/2+") rotate(-90)"} textAnchor="middle" fill="#94a3b8" fontSize={7}>RFU</text>
+        </g></svg></Zoomable>}
+        <div style={{fontSize:8,color:"#64748b",textAlign:"center",marginTop:2}}>{"slope="+fit.slope+" int="+fit.inter+" | "+stdPts.length+" stds · "+spikes2.length+" spike-ins · "+sampMeas.length+" samples"}</div>
+      </div>
+    </div>
+
+    {/* ── ROW 3: Well table ── */}
+    <div style={sty.pn}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <div style={sty.pt}><span style={sty.dt("#0891b2")}/>Well Data ({wRows.length} wells)</div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}><input value={search} onChange={e=>{setSearch(e.target.value);sPg(0);}} placeholder="Search…" style={{...sty.sl,width:140,padding:"3px 8px"}}/><button onClick={doExport} style={{...sty.bt,background:"#059669",color:"#fff",border:"none"}}>⬇ Export</button></div>
+      </div>
+      <div style={{overflowX:"auto",maxHeight:220,overflowY:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:9,tableLayout:"fixed"}}>
+          <thead><tr>{wCols.map(c=><th key={c.k} style={{...sty.th,width:c.w,cursor:"pointer",userSelect:"none",textAlign:c.nm?"right":"left"}} onClick={()=>doSort(c.k)}>{c.l+(sortK===c.k?(sortD===1?" ▲":" ▼"):"")}</th>)}</tr></thead>
+          <tbody>{wPaged.map((r,i)=><tr key={i} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            {wCols.map(c=><td key={c.k} style={{...(c.nm?sty.tn:sty.td),overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:c.w}}>{r[c.k]!=null?r[c.k]:""}</td>)}
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {tPg>1&&<div style={{display:"flex",justifyContent:"center",gap:8,marginTop:4}}><button onClick={()=>sPg(p=>Math.max(0,p-1))} disabled={pg===0} style={{...sty.bt,opacity:pg===0?.4:1}}>←</button><span style={{fontSize:9,color:"#64748b"}}>{(pg+1)+"/"+tPg}</span><button onClick={()=>sPg(p=>Math.min(tPg-1,p+1))} disabled={pg>=tPg-1} style={{...sty.bt,opacity:pg>=tPg-1?.4:1}}>→</button></div>}
+    </div>
+
+    {/* ── ROW 4: Spatial analysis (bottom) ── */}
+    <div style={{...sty.pn,marginTop:6}}>
+      <div style={sty.pt}><span style={sty.dt("#dc2626")}/>Spatial Analysis — Edge Effects</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div><div style={{fontSize:8,color:"#64748b",fontWeight:600,marginBottom:4}}>Mean Concentration by Row</div>
+          {rowStats.length>0?<BarChart items={rowStats} lk="row" vk="mean" width={340} height={130} color="#dc2626"/>:<div style={{color:"#94a3b8",fontSize:10}}>No row data</div>}
+        </div>
+        <div><div style={{fontSize:8,color:"#64748b",fontWeight:600,marginBottom:4}}>Mean Concentration by Column</div>
+          {colStats.length>0?<BarChart items={colStats} lk="col" vk="mean" width={340} height={130} color="#7c3aed"/>:<div style={{color:"#94a3b8",fontSize:10}}>No column data</div>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+ReactDOM.render(<AppWrap activePage="experiment" renderContent={({fd,data})=><ExperimentDeepDive fd={fd} data={data}/>}/>,document.getElementById("app"));
+</script></body></html>

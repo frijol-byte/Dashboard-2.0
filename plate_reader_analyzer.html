@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P902 Lot Browser</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#FAFAF8;--surface:#FFFFFF;--surface2:#F3F2EE;--surface3:#EBE9E4;
+  --text:#1A1A18;--text2:#5C5B56;--text3:#8E8D88;
+  --accent:#1B6B4A;--accent-light:#E8F5EE;--accent-dark:#0F4A32;
+  --blue:#1E40AF;--blue-light:#E8EEFB;--blue-dark:#172554;
+  --purple:#6D28D9;--purple-light:#F3EEFB;--purple-dark:#4C1D95;
+  --amber:#92400E;--amber-light:#FEF3C7;--amber-dark:#78350F;
+  --danger:#B5342E;--danger-light:#FCEEED;
+  --border:#DDD9D1;--border2:#C8C4BB;
+  --radius:10px;--radius-lg:14px;
+}
+html{font-family:'DM Sans',system-ui,sans-serif;font-size:15px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{max-width:1120px;margin:0 auto;padding:2rem 1.5rem 4rem}
+
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text2);font-size:.78rem;font-weight:500;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light);box-shadow:0 4px 12px rgba(27,107,74,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.hero{text-align:center;padding:2.5rem 0 2rem;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:320px;height:320px;background:radial-gradient(circle,rgba(109,40,217,.06) 0%,transparent 70%);pointer-events:none;z-index:0}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--purple-light);color:var(--purple-dark);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:1.25rem;position:relative;z-index:1}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--purple);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:2.1rem;font-weight:600;letter-spacing:-.03em;line-height:1.15;margin-bottom:.6rem;position:relative;z-index:1}
+.hero p{font-size:1rem;color:var(--text2);max-width:540px;margin:0 auto;line-height:1.55;position:relative;z-index:1}
+
+.status{padding:.7rem 1rem;border-radius:var(--radius);font-size:.82rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:8px}
+.status.loading{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+.status.ready{background:var(--accent-light);color:var(--accent-dark);border:1px solid #A7F3D0}
+.status.error{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #BFDBFE;border-top-color:#2563EB;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tag{font-family:'JetBrains Mono',monospace;font-weight:500;font-size:.75rem;background:rgba(0,0,0,.05);padding:2px 8px;border-radius:6px}
+
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1.75rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem}
+.stat-card .stat-label{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-card .stat-value{font-size:1.35rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+.stat-card.accent{border-color:var(--purple);background:var(--purple-light)}
+.stat-card.accent .stat-value{color:var(--purple-dark)}
+
+.tabs-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:8px 0 0;margin-bottom:1.5rem}
+.tabs{display:flex;flex-wrap:wrap;gap:6px 4px;padding-bottom:10px;border-bottom:1.5px solid var(--border)}
+.tab-btn{padding:7px 14px;font-size:.78rem;font-weight:500;cursor:pointer;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text2);white-space:nowrap;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.tab-btn:hover{border-color:var(--border2);color:var(--text);background:var(--surface2)}
+.tab-btn.active{color:#fff;border-color:var(--purple);background:var(--purple);box-shadow:0 2px 8px rgba(109,40,217,.18)}
+.tab-btn.active:hover{background:var(--purple-dark);border-color:var(--purple-dark)}
+.tab-btn::before{content:'';width:3px;height:14px;border-radius:2px;flex-shrink:0}
+.tab-btn.active::before{background:rgba(255,255,255,.5)}
+.tab-count{font-size:.65rem;font-family:'JetBrains Mono',monospace;background:rgba(0,0,0,.06);padding:1px 6px;border-radius:6px;margin-left:1px}
+.tab-btn.active .tab-count{background:rgba(255,255,255,.25);color:#fff}
+@media(max-width:700px){.tab-btn{padding:6px 10px;font-size:.72rem}.tab-btn::before{width:2px;height:12px}.tab-count{font-size:.6rem}}
+@media(max-width:480px){.tab-btn{padding:5px 8px;font-size:.68rem}}
+
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeUp .35s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
+.search-box{flex:1;min-width:200px;position:relative}
+.search-box input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:.85rem;font-family:inherit;background:var(--surface);color:var(--text);transition:border-color .2s}
+.search-box input:focus{outline:none;border-color:var(--purple)}
+.search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text3)}
+.add-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius);border:1.5px solid var(--purple);background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap}
+.add-btn:hover{background:var(--purple-dark)}
+.add-btn svg{width:14px;height:14px}
+.export-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:.78rem;font-weight:500;cursor:pointer;font-family:inherit;transition:all .2s}
+.export-btn:hover{border-color:var(--purple);color:var(--purple);background:var(--purple-light)}
+.export-btn svg{width:14px;height:14px}
+
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:1.5rem;max-height:520px;overflow-y:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.data-table th{text-align:left;padding:10px 12px;font-weight:600;color:var(--text3);border-bottom:1.5px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;background:var(--surface2);position:sticky;top:0;cursor:pointer;user-select:none;z-index:2}
+.data-table th:hover{color:var(--text)}
+.data-table th .sort-icon{display:inline-block;margin-left:4px;opacity:.3;font-size:.6rem}
+.data-table th.sorted .sort-icon{opacity:1;color:var(--purple)}
+.data-table td{padding:8px 12px;border-bottom:1px solid var(--surface2);font-family:'JetBrains Mono',monospace;font-size:.75rem;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.data-table td:first-child{font-family:'DM Sans',sans-serif;font-weight:500;font-size:.82rem}
+.data-table tr:hover td{background:var(--surface2)}
+
+.chart-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.chart-title{font-size:.9rem;font-weight:600}
+.chart-container{position:relative;width:100%;height:300px}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:1.5rem}
+@media(max-width:700px){.chart-row{grid-template-columns:1fr}}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);padding:2rem;width:90%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15);animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal h3{font-size:1.1rem;font-weight:600;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px}
+.modal h3 .badge{font-size:.68rem;font-family:'JetBrains Mono',monospace;background:var(--purple-light);color:var(--purple-dark);padding:2px 8px;border-radius:8px}
+.modal-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field.full{grid-column:1/-1}
+.field label{font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.field input,.field textarea{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--surface);color:var(--text);transition:border-color .2s}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--purple)}
+.field textarea{resize:vertical;min-height:60px;font-family:'JetBrains Mono',monospace;font-size:.78rem}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)}
+.btn-cancel{padding:9px 18px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:.82rem;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-cancel:hover{border-color:var(--text3);color:var(--text)}
+.btn-save{padding:9px 22px;border-radius:var(--radius);border:none;background:var(--purple);color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-save:hover{background:var(--purple-dark)}
+
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:var(--radius);background:var(--purple-dark);color:#fff;font-size:.85rem;font-weight:500;z-index:200;transform:translateY(80px);opacity:0;transition:all .35s cubic-bezier(.22,1,.36,1)}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ── GITLAB SETTINGS ── */
+.gl-panel{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
+.gl-panel summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:8px;list-style:none;user-select:none}
+.gl-panel summary::-webkit-details-marker{display:none}
+.gl-panel summary::before{content:'▸';font-size:.75rem;transition:transform .2s;display:inline-block;width:12px}
+.gl-panel[open] summary::before{transform:rotate(90deg)}
+.gl-panel summary .gl-icon{width:32px;height:32px;border-radius:8px;background:var(--purple-light);color:var(--purple);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.gl-panel summary .gl-tag{font-size:.65rem;font-family:'JetBrains Mono',monospace;background:var(--accent-light);color:var(--accent-dark);padding:2px 8px;border-radius:6px}
+.gl-panel summary .gl-tag.disconnected{background:var(--surface2);color:var(--text3)}
+.gl-panel .gl-body{padding-top:1rem}
+.gl-panel .gl-desc{font-size:.8rem;color:var(--text2);margin-bottom:1rem;line-height:1.5}
+.gl-row{display:flex;gap:10px}
+.gl-row .gl-field:first-child{flex:2}
+.gl-row .gl-field:last-child{flex:1}
+.gl-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.gl-field label{font-size:.7rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
+.gl-hint{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:.68rem}
+.gl-field input{padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.8rem;background:var(--surface);color:var(--text);transition:border-color .2s}
+.gl-field input:focus{outline:none;border-color:var(--purple)}
+.gl-field input::placeholder{color:var(--text3);font-weight:400}
+.gl-clear-btn{font-size:.7rem;padding:4px 10px;border:1px solid var(--danger);border-radius:6px;background:none;color:var(--danger);cursor:pointer;font-family:inherit;transition:all .2s}
+.gl-clear-btn:hover{background:var(--danger-light)}
+.gl-status{margin-top:.75rem;font-size:.8rem;padding:.6rem 1rem;border-radius:var(--radius);display:none}
+.gl-status.show{display:block}
+.gl-status.ok{background:var(--accent-light);color:var(--accent-dark);border:1px solid #A7F3D0}
+.gl-status.err{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}
+.gl-status.info{background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}
+
+.fade-in{animation:fadeUp .5s ease both}
+.stagger-1{animation-delay:.05s}.stagger-2{animation-delay:.1s}
+#mainUI{display:none}
+</style>
+</head>
+<body>
+
+<a class="home-btn" href="index.html">
+  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit home
+</a>
+
+<div class="app">
+  <div class="hero fade-in">
+    <div class="hero-badge"><span class="dot"></span> Lot management</div>
+    <h1>P902 Lot Browser</h1>
+    <p>Track and manage all lot records for the P902 CFPS project. Data loaded live from the shared database &mdash; add entries, search, and export.</p>
+  </div>
+
+  <div id="status" class="status loading fade-in stagger-1">
+    <span class="spinner"></span> Loading database&hellip;
+  </div>
+
+  <div id="mainUI">
+    <!-- GitLab connection -->
+    <details class="gl-panel fade-in" id="glPanel">
+      <summary>
+        <span class="gl-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
+        GitLab connection
+        <span class="gl-tag disconnected" id="glTag">not configured</span>
+      </summary>
+      <div class="gl-body">
+        <p class="gl-desc">Connect to your GitLab repo so new entries get committed directly to <code>data/lots/</code>. The pipeline rebuilds the database automatically.</p>
+        <div class="gl-row">
+          <div class="gl-field">
+            <label>GitLab Project ID (Copy below): 81128470</label>
+            <input type="text" id="glProject" placeholder="e.g. 81128470 or group/repo" spellcheck="false">
+          </div>
+          <div class="gl-field">
+            <label>Branch</label>
+            <input type="text" id="glBranch" value="main" spellcheck="false">
+          </div>
+        </div>
+        <div class="gl-field">
+          <label>Personal access token (copy below): glpat-0OhHblJkGJLryyfDHB6V4GM6MQpvOjEKdTpjMnkyaA8.01.17003ko8n <span class="gl-hint">(api scope — stored in your browser only)</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="glToken" placeholder="glpat-xxxxxxxxxxxx" spellcheck="false" style="flex:1">
+            <button class="export-btn" onclick="toggleTokenVis()" id="toggleTok" style="font-size:.7rem;padding:6px 10px">Show</button>
+            <button class="gl-clear-btn" onclick="clearGLSettings()">Clear</button>
+          </div>
+        </div>
+        <div class="gl-status" id="glStatus"></div>
+      </div>
+    </details>
+
+    <div class="stats-row fade-in" id="statsRow"></div>
+    <div class="tabs-wrap fade-in stagger-1"><div class="tabs" id="tabBar"></div></div>
+    <div id="panels"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <h3 id="modalTitle">Add Entry</h3>
+    <div class="modal-fields" id="modalFields"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ───
+const TABLE_LABELS = {
+  lot_fermentation:'Fermentation', lot_lysate:'Lysate', lot_mastermix:'Mastermix',
+  lot_std_curves:'Std Curves', lot_controls:'Controls', lot_plasmid:'Plasmid',
+  lot_premix:'Premix', lot_solubility_enhancer:'Sol. Enhancer',
+  lot_pre_so_mm:'Pre-SO MM', lot_cf_product:'CF Product',
+  lot_delivered_material:'Delivered Material'
+};
+const COLOR_MAP = {
+  lot_fermentation:'var(--accent)', lot_lysate:'var(--accent)', lot_mastermix:'var(--accent)',
+  lot_std_curves:'var(--blue)', lot_controls:'var(--blue)', lot_plasmid:'var(--purple)',
+  lot_premix:'var(--purple)', lot_solubility_enhancer:'var(--purple)',
+  lot_pre_so_mm:'var(--amber)', lot_cf_product:'var(--accent)',
+  lot_delivered_material:'var(--amber)'
+};
+const PALETTE = ['#6D28D9','#1B6B4A','#1E40AF','#92400E','#B5342E','#0F766E','#9333EA','#C2410C'];
+
+let db = null;
+let tables = [];
+let activeTab = null;
+let sortState = {};
+let searchTerms = {};
+let charts = {};
+let currentModalTab = null;
+
+// ─── INIT ───
+async function init(){
+  const status = document.getElementById('status');
+  try {
+    const sqlPromise = initSqlJs({locateFile: f => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/' + f});
+    const dataPromise = fetch('cfps.db').then(r => {
+      if (!r.ok) throw new Error('cfps.db not found — run build_db.py or check the CI pipeline.');
+      return r.arrayBuffer();
+    });
+    const [SQL, buf] = await Promise.all([sqlPromise, dataPromise]);
+    db = new SQL.Database(new Uint8Array(buf));
+
+    // Auto-discover lot_ tables
+    const res = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'lot_%' ORDER BY name");
+    if (!res.length || !res[0].values.length) throw new Error('No lot_ tables in cfps.db. Add CSVs to data/lots/ and rebuild.');
+
+    res[0].values.forEach(([name]) => {
+      const cols = db.exec('PRAGMA table_info("' + name + '")');
+      const columns = cols[0].values.map(r => r[1]);
+      const cnt = db.exec('SELECT COUNT(*) FROM "' + name + '"');
+      const count = cnt[0].values[0][0];
+      tables.push({
+        name, columns, count,
+        label: TABLE_LABELS[name] || name.replace('lot_', '').replace(/_/g, ' '),
+        pip: COLOR_MAP[name] || 'var(--purple)'
+      });
+    });
+
+    const totalRows = tables.reduce((s, t) => s + t.count, 0);
+    status.className = 'status ready fade-in';
+    status.innerHTML = 'Database loaded — <span class="tag">' + tables.length + ' tables</span> <span class="tag">' + totalRows + ' rows</span>';
+
+    activeTab = tables[0].name;
+    document.getElementById('mainUI').style.display = 'block';
+    renderStats();
+    renderTabs();
+    renderPanels();
+    switchTab(activeTab);
+  } catch (err) {
+    status.className = 'status error fade-in';
+    status.textContent = 'Failed: ' + err.message;
+  }
+}
+
+// ─── SQL HELPERS ───
+function qExec(sql, params) {
+  try { return db.exec(sql, params); }
+  catch (e) { console.error('SQL:', sql, e); return []; }
+}
+function qRun(sql, params) {
+  try { db.run(sql, params); }
+  catch (e) { console.error('SQL:', sql, e); }
+}
+function getRows(tblName, search, sortCol, sortAsc) {
+  const t = tables.find(x => x.name === tblName);
+  let sql = 'SELECT * FROM "' + tblName + '"';
+  let params = [];
+  if (search) {
+    const clauses = t.columns.map(c => 'CAST("' + c + '" AS TEXT) LIKE ?');
+    sql += ' WHERE ' + clauses.join(' OR ');
+    params = t.columns.map(() => '%' + search + '%');
+  }
+  if (sortCol !== undefined) {
+    sql += ' ORDER BY "' + t.columns[sortCol] + '"' + (sortAsc ? ' ASC' : ' DESC');
+  }
+  const res = qExec(sql, params);
+  if (!res.length) return { columns: t.columns, rows: [] };
+  return { columns: res[0].columns, rows: res[0].values };
+}
+
+// ─── RENDER ───
+function renderStats() {
+  const el = document.getElementById('statsRow');
+  const top = tables.slice(0, 4);
+  const total = tables.reduce((s, t) => s + t.count, 0);
+  const stats = top.map(t => ({ label: t.label, value: t.count }));
+  stats.push({ label: 'Total Lots', value: total, accent: true });
+  el.innerHTML = stats.map(s =>
+    '<div class="stat-card' + (s.accent ? ' accent' : '') + '">' +
+    '<div class="stat-label">' + s.label + '</div>' +
+    '<div class="stat-value">' + s.value + '</div></div>'
+  ).join('');
+}
+
+function renderTabs() {
+  const el = document.getElementById('tabBar');
+  el.innerHTML = tables.map(t => {
+    const active = t.name === activeTab ? ' active' : '';
+    return '<button class="tab-btn' + active + '" data-tab="' + t.name + '" style="' +
+      '--pip-color:' + t.pip + '">' + t.label +
+      '<span class="tab-count">' + t.count + '</span></button>';
+  }).join('');
+  el.querySelectorAll('.tab-btn').forEach(btn => {
+    // apply pip color
+    btn.style.setProperty('--pip-color', btn.style.getPropertyValue('--pip-color'));
+    btn.querySelector('::before');
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+  // Set pip colors via CSS override
+  const style = document.createElement('style');
+  style.textContent = tables.map(t =>
+    '.tab-btn[data-tab="' + t.name + '"]::before{background:' + t.pip + '}'
+  ).join('\n');
+  // Remove previous dynamic style if any
+  const old = document.getElementById('tab-pip-styles');
+  if (old) old.remove();
+  style.id = 'tab-pip-styles';
+  document.head.appendChild(style);
+}
+
+function renderPanels() {
+  const el = document.getElementById('panels');
+  el.innerHTML = tables.map(t => {
+    const active = t.name === activeTab ? ' active' : '';
+    return '<div class="tab-panel' + active + '" id="panel-' + t.name + '">' +
+      '<div class="toolbar">' +
+      '<div class="search-box">' +
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>' +
+      '<input type="text" placeholder="Search ' + t.label.toLowerCase() + '…" oninput="onSearch(\'' + t.name + '\',this.value)">' +
+      '</div>' +
+      '<button class="add-btn" onclick="openModal(\'' + t.name + '\')">' +
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add entry</button>' +
+      '<button class="export-btn" onclick="exportCSV(\'' + t.name + '\')">' +
+      '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>' +
+      '</div>' +
+      '<div class="chart-row" id="charts-' + t.name + '"></div>' +
+      '<div class="table-wrap" id="tableWrap-' + t.name + '"></div>' +
+      '</div>';
+  }).join('');
+  tables.forEach(t => renderTable(t.name));
+}
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderTable(tblName) {
+  const wrap = document.getElementById('tableWrap-' + tblName);
+  const term = searchTerms[tblName] || '';
+  const ss = sortState[tblName];
+  const { columns, rows } = getRows(tblName, term, ss ? ss.col : undefined, ss ? ss.asc : undefined);
+
+  let html = '<table class="data-table"><thead><tr>';
+  columns.forEach((c, i) => {
+    const sorted = ss && ss.col === i;
+    const arrow = sorted ? (ss.asc ? '▲' : '▼') : '⇅';
+    html += '<th class="' + (sorted ? 'sorted' : '') + '" onclick="sortColumn(\'' + tblName + '\',' + i + ')">' +
+      esc(c.replace(/_/g, ' ')) + '<span class="sort-icon">' + arrow + '</span></th>';
+  });
+  html += '</tr></thead><tbody>';
+  if (!rows.length) {
+    html += '<tr><td colspan="' + columns.length + '" style="text-align:center;color:var(--text3);font-style:italic;padding:2rem;font-family:DM Sans,sans-serif">No entries found</td></tr>';
+  } else {
+    rows.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        let v = cell === null ? '' : String(cell);
+        const trunc = v.length > 45;
+        html += '<td' + (trunc ? ' title="' + esc(v).replace(/"/g, '&quot;') + '"' : '') + '>' +
+          esc(trunc ? v.substring(0, 43) + '…' : v) + '</td>';
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function switchTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+  buildCharts(name);
+}
+
+function onSearch(tblName, val) { searchTerms[tblName] = val; renderTable(tblName); }
+
+function sortColumn(tblName, ci) {
+  const ss = sortState[tblName];
+  sortState[tblName] = (ss && ss.col === ci) ? { col: ci, asc: !ss.asc } : { col: ci, asc: true };
+  renderTable(tblName);
+}
+
+// ─── AUTO CHARTS ───
+function buildCharts(tblName) {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+  const el = document.getElementById('charts-' + tblName);
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.gridTemplateColumns = '';
+
+  const t = tables.find(x => x.name === tblName);
+  if (!t || t.count < 2) return;
+
+  const dateCols = t.columns.filter(c => /date|expiry|prep/i.test(c));
+  const catCols = t.columns.filter(c => /strain|type|protein|fluorescence|reagent|product|version|fte|operator|use/i.test(c));
+  const numCols = t.columns.filter(c => /volume|count|pellet|aliquot|kits|tubes|r2|slope|conc|sol/i.test(c));
+
+  let n = 0;
+
+  // Donut for first categorical column
+  if (catCols.length) {
+    const col = catCols[0];
+    const res = qExec('SELECT "' + col + '", COUNT(*) as n FROM "' + tblName + '" WHERE "' + col + '" != \'\' GROUP BY "' + col + '" ORDER BY n DESC LIMIT 10');
+    if (res.length && res[0].values.length > 1) {
+      const id = 'ch-' + tblName + '-cat';
+      el.innerHTML += '<div class="chart-panel"><div class="chart-header"><span class="chart-title">' +
+        esc(col.replace(/_/g, ' ')) + ' distribution</span></div><div class="chart-container"><canvas id="' + id + '"></canvas></div></div>';
+      setTimeout(() => {
+        const labels = res[0].values.map(r => r[0] || '(empty)');
+        const data = res[0].values.map(r => r[1]);
+        charts[id] = new Chart(document.getElementById(id), {
+          type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: PALETTE.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }, cutout: '58%' }
+        });
+      }, 50);
+      n++;
+    }
+  }
+
+  // Bar for first numeric column
+  if (numCols.length) {
+    const numCol = numCols[0];
+    const labelCol = dateCols.length ? dateCols[0] : t.columns[0];
+    const res = qExec('SELECT "' + labelCol + '", "' + numCol + '" FROM "' + tblName +
+      '" WHERE "' + numCol + '" != \'\' AND "' + numCol + '" IS NOT NULL ORDER BY rowid');
+    if (res.length) {
+      const vals = res[0].values.filter(r => r[1] !== null && r[1] !== '' && !isNaN(Number(r[1])));
+      if (vals.length > 1) {
+        const id = 'ch-' + tblName + '-num';
+        el.innerHTML += '<div class="chart-panel"><div class="chart-header"><span class="chart-title">' +
+          esc(numCol.replace(/_/g, ' ')) + '</span></div><div class="chart-container"><canvas id="' + id + '"></canvas></div></div>';
+        setTimeout(() => {
+          charts[id] = new Chart(document.getElementById(id), {
+            type: 'bar', data: { labels: vals.map(r => String(r[0]).substring(0, 10)), datasets: [{ label: numCol.replace(/_/g, ' '), data: vals.map(r => Number(r[1])), backgroundColor: 'rgba(109,40,217,.6)', borderRadius: 4, borderSkipped: false }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { ticks: { font: { size: 9 }, maxRotation: 55 } } } }
+          });
+        }, 50);
+        n++;
+      }
+    }
+  }
+
+  if (n < 2) el.style.gridTemplateColumns = '1fr';
+}
+
+// ─── GITLAB SETTINGS ───
+function loadGLSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('lot_gl_settings') || '{}');
+    if (s.project) document.getElementById('glProject').value = s.project;
+    if (s.branch) document.getElementById('glBranch').value = s.branch;
+    if (s.token) document.getElementById('glToken').value = s.token;
+    updateGLTag();
+  } catch (e) {}
+}
+function saveGLSettings() {
+  const s = {
+    project: document.getElementById('glProject').value.trim(),
+    branch: document.getElementById('glBranch').value.trim() || 'main',
+    token: document.getElementById('glToken').value.trim()
+  };
+  try { localStorage.setItem('lot_gl_settings', JSON.stringify(s)); } catch (e) {}
+  updateGLTag();
+  return s;
+}
+function clearGLSettings() {
+  try { localStorage.removeItem('lot_gl_settings'); } catch (e) {}
+  document.getElementById('glProject').value = '';
+  document.getElementById('glBranch').value = 'main';
+  document.getElementById('glToken').value = '';
+  updateGLTag();
+}
+function updateGLTag() {
+  const tag = document.getElementById('glTag');
+  const proj = document.getElementById('glProject').value.trim();
+  const tok = document.getElementById('glToken').value.trim();
+  if (proj && tok) {
+    tag.textContent = 'connected';
+    tag.className = 'gl-tag';
+  } else {
+    tag.textContent = 'not configured';
+    tag.className = 'gl-tag disconnected';
+  }
+}
+function toggleTokenVis() {
+  const inp = document.getElementById('glToken');
+  const btn = document.getElementById('toggleTok');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+// Listen for changes to update tag
+['glProject', 'glToken'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => { saveGLSettings(); });
+});
+document.getElementById('glBranch').addEventListener('change', () => { saveGLSettings(); });
+loadGLSettings();
+
+// ─── MODAL ───
+function openModal(tblName) {
+  currentModalTab = tblName;
+  const t = tables.find(x => x.name === tblName);
+  document.getElementById('modalTitle').innerHTML = 'Add Entry <span class="badge">' + esc(t.label) + '</span>';
+  const fields = document.getElementById('modalFields');
+  fields.innerHTML = t.columns.map((c, i) => {
+    const label = c.replace(/_/g, ' ');
+    const isLong = /comment|note|eln|sop|link|description|sheet/i.test(c);
+    return '<div class="field' + (isLong ? ' full' : '') + '"><label>' + esc(label) + '</label>' +
+      (isLong
+        ? '<textarea id="mf-' + i + '" placeholder="' + esc(label) + '"></textarea>'
+        : '<input type="text" id="mf-' + i + '" placeholder="' + esc(label) + '">') +
+      '</div>';
+  }).join('');
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => { var f = document.getElementById('mf-0'); if (f) f.focus(); }, 100);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  currentModalTab = null;
+}
+
+function saveEntry() {
+  if (!currentModalTab || !db) return;
+  const t = tables.find(x => x.name === currentModalTab);
+  const vals = t.columns.map((_, i) => {
+    const el = document.getElementById('mf-' + i);
+    return el ? el.value.trim() : '';
+  });
+
+  // 1. Insert into in-browser SQLite
+  const ph = t.columns.map(() => '?').join(',');
+  const cn = t.columns.map(c => '"' + c + '"').join(',');
+  qRun('INSERT INTO "' + t.name + '" (' + cn + ') VALUES (' + ph + ')', vals);
+
+  // Refresh count
+  const cnt = qExec('SELECT COUNT(*) FROM "' + t.name + '"');
+  t.count = cnt[0].values[0][0];
+
+  closeModal();
+  renderStats();
+  renderTabs();
+  renderTable(t.name);
+  buildCharts(t.name);
+
+  // 2. Push to GitLab if configured
+  const gl = saveGLSettings();
+  if (gl.project && gl.token) {
+    pushToGitLab(t, vals);
+  } else {
+    showToast('Entry added locally — configure GitLab to auto-commit');
+  }
+}
+
+async function pushToGitLab(t, newRowVals) {
+  const gl = saveGLSettings();
+  const status = document.getElementById('glStatus');
+  status.className = 'gl-status show info';
+  status.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Pushing to GitLab…';
+
+  try {
+    const projectId = encodeURIComponent(gl.project);
+    const csvFilename = t.name.replace('lot_', '') + '.csv';
+    const filePath = 'data/lots/' + csvFilename;
+
+    // Fetch the existing CSV from the repo to append
+    let existingCSV = '';
+    let action = 'create';
+    try {
+      const fileResp = await fetch(
+        'https://gitlab.com/api/v4/projects/' + projectId + '/repository/files/' +
+        encodeURIComponent(filePath) + '/raw?ref=' + encodeURIComponent(gl.branch),
+        { headers: { 'PRIVATE-TOKEN': gl.token } }
+      );
+      if (fileResp.ok) {
+        existingCSV = await fileResp.text();
+        action = 'update';
+      }
+    } catch (e) { /* file doesn't exist yet, will create */ }
+
+    // Build the new row as CSV line
+    const csvLine = newRowVals.map(v => {
+      const s = String(v);
+      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0)
+        return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }).join(',');
+
+    let newContent;
+    if (existingCSV) {
+      // Append row to existing CSV
+      const trimmed = existingCSV.trimEnd();
+      newContent = trimmed + '\n' + csvLine + '\n';
+    } else {
+      // Create new CSV with header + row
+      const header = t.columns.join(',');
+      newContent = header + '\n' + csvLine + '\n';
+    }
+
+    // Commit via GitLab API
+    const commitPayload = {
+      branch: gl.branch,
+      commit_message: '[Lot Browser] Add entry to ' + t.label + ' (' + csvFilename + ')',
+      actions: [{
+        action: action,
+        file_path: filePath,
+        content: newContent
+      }]
+    };
+
+    const resp = await fetch('https://gitlab.com/api/v4/projects/' + projectId + '/repository/commits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'PRIVATE-TOKEN': gl.token
+      },
+      body: JSON.stringify(commitPayload)
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const sha = data.id ? data.id.substring(0, 8) : '';
+      status.className = 'gl-status show ok';
+      status.innerHTML = '<strong>Committed</strong> — ' + esc(csvFilename) +
+        ' → <code>' + gl.branch + '</code>' +
+        (sha ? ' · <code>' + sha + '</code>' : '') +
+        '. Pipeline will rebuild the DB.';
+      showToast('Entry saved to ' + t.label + ' & pushed to GitLab');
+      // Auto-hide after 8s
+      setTimeout(() => { status.className = 'gl-status'; }, 8000);
+    } else {
+      const errData = await resp.json().catch(() => ({}));
+      const errMsg = errData.message || errData.error || resp.statusText;
+      status.className = 'gl-status show err';
+      status.innerHTML = '<strong>GitLab API error (' + resp.status + ')</strong>: ' + esc(String(errMsg));
+      showToast('Entry saved locally — GitLab push failed');
+    }
+  } catch (err) {
+    status.className = 'gl-status show err';
+    status.innerHTML = '<strong>Push failed</strong>: ' + esc(err.message);
+    showToast('Entry saved locally — GitLab push failed');
+  }
+}
+
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ─── EXPORT ───
+function exportCSV(tblName) {
+  const t = tables.find(x => x.name === tblName);
+  const { columns, rows } = getRows(tblName);
+  let csv = columns.map(c => '"' + c + '"').join(',') + '\n';
+  rows.forEach(row => {
+    csv += row.map(v => v === null ? '' : '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = tblName.replace('lot_', '') + '_lots.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Exported ' + t.label + ' as CSV');
+}
+
+// ─── TOAST ───
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+init();
+</script>
+</body>
+</html>

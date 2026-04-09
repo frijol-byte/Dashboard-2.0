@@ -1,0 +1,44 @@
+num,fte,date,lysis_sop,batch_record,lysis_lot_number,fermentation_lot,starting_lysate_volume_ml,resuspension_ratio_ml_-_buffer:g_-_pellet,lims_id,kglu_mm,mgglu_mm,cfu_count,abs_quant_plasmid_g_l,abs_quant_plasmid_cv_pct,approximate_data_source_link,abs_quant_linear_g_l,abs_quant_linear_-_cv_pct,approximate_data_source_link.1,solubility_pct,solubility_error_cvpct,approximate_data_source_link.2,salt_optimization_experiment_file,use
+1,Jose Morales Hemuda,20250411,,,20250411-1-L,20250410_006,,,,,,,,,,,,,,,,,
+2,Jose Morales Hemuda,20250609,,,20250609-2-L,20250410_007,,,,,,,,,,,,,,,,,
+3,Jose Morales Hemuda,20250721,,,20250721-3-L,20250820-F10-5,,0.7 mL/g,,160,9,Lawn,,,,,,,,,,20250729 Echo setup P902 Salt Optimization,
+4,Jose Morales Hemuda,20250811,,,20250811-4-L,20250820-F11-6,,0.7 mL/g,,240,12,Lawn,,,,,,,,,,20250814 P902 Salt Optimization Echo setup,
+5,Kevin Christopher,20250918,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20250918-5-L,20250917-7-F09,758.94,1.4 mL/g,e12132,160,8,70000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+6,Kevin Christopher,20250918,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20250918-6-L,20250917-8-F10,715.87,1.4 mL/g,e12131,200,8,17000000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+7,Kevin Christopher,20250918,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20250918-7-L,20250917-9-F11,714.36,1.4 mL/g,e12129,240,8,400000,,,,,,,,,,20250919 P902 E49 Salt Optimization Echo setup,
+8,Kevin Christopher,20251008,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251008-8-L,20250930-10-F09,226.55,0.7 mL/g,e12133,,,,,,,,,,,,,,
+9,Kevin Christopher,20251008,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251008-9-L,20250930-10-F09,163.97,1.4 mL/g,e12134,,,,,,,,,,,,,,
+10,Kevin Christopher,20251008,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251008-10-L,20250930-11-F10,255.02,0.7 mL/g,e12135,,,,,,,,,,,,,,
+11,Kevin Christopher,20251008,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251008-11-L,20250930-11-F10,163.77,1.4 mL/g,e12136,,,500000,,,,,,,,,,,
+12,Kevin Christopher,20251024,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251024-12-L,"20251023-F09-14
+20251023-F11-15",700.68,1.4 mL/g,e12149,120,6,100,"0.58-0.75 (1-MMA)
+1.13 ( 5-MMA)",,"P902_E92-QC-20251029-Abs quant for validation of E91 Master Mix and E76 lysate using plasmid and linear templates - Results
+P902_E096-QC-20251103-Abs quant for validation of MM Lot 4, 5, 6 with E76 lysate using plasmid and linear templates","0.42 - 0.47 (1-MMA)
+0.47 (5-MMA)",,"P902_E92-QC-20251029-Abs quant for validation of E91 Master Mix and E76 lysate using plasmid and linear templates - Results
+P902_E096-QC-20251103-Abs quant for validation of MM Lot 4, 5, 6 with E76 lysate using plasmid and linear templates",55,,Solubility: E98 VCE Solubility Data for 0.2% Brij MM -- 20251103-6-MM-B,P902 E87 Salt Optimization of E76 lysate 20251028,External / Internal
+13,Kevin Christopher,20251106,20250529 Ginkgo Lysing protocol for CFPS.docx,ELN,20251106-13-L,"20251105-F09-16
+20251105-F10-17
+20251105-F11-18",863.88,1.4 mL/g,e12163,240,4,50,,,,,,,,,,E112-SO-20251112-Redo Salt Optima and Abs Quant on E100 Lysate,Internal
+14,Chris Lionetti,20251125,20250529 Ginkgo Lysing protocol for CFPS.docx,https://ginkgo.signalsresearch2.revvitycloud.com/elements/entity/experiment:cb31d0a7-34d3-46ea-93e6-a5e83f505f51?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20251125-14-L,"20251120-F09-19
+20251120-F10-20",450 mL,1.4 mL/g,e12223,120,4,30000,2.6,,,,,,,,,,Internal
+14-D,Chris Lionetti,20251125,20250529 Ginkgo Lysing protocol for CFPS.docx,https://ginkgo.signalsresearch2.revvitycloud.com/elements/entity/experiment:cb31d0a7-34d3-46ea-93e6-a5e83f505f51?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20251125-14-D-L,"20251120-F09-19
+20251120-F10-20",300 mL,1.4 mL/g,e12224,120,4,30000,1.3,,,,,,,,,,
+15,Chris Lionetti / Isis Botelho Nunes da Silva,20251209,P902 Pellet Lysis Batch Record,https://ginkgo.signalsresearch2.revvitycloud.com/elements/entity/experiment:43a03c18-988a-4127-be26-e7963cc4f8f2?focus=text%3A3b8cebed-60b8-4929-aaa9-b5562658abf4&view=status,20251209-15-L,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",168 mL,1.4 ml/g,e12249,180,4,400,,,,,,,,,,,Internal / External
+16,Chris Lionetti/Rahul Karandikar,20251219,P902 Pellet Lysis Batch Record,20251219-16-L.pdf,20251219-16-L,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",733,1.4 ml/g,e12259,180,4,150,,,,,,,,,,,Internal
+17,Chris Lionetti,20260121,P902 Pellet Lysis Batch Record,https://ginkgo.signalsresearch2.revvitycloud.com/elements/entity/experiment:04a21013-d0d3-4691-89dc-0f3bcc701a0c?focus=experiment%3A5d8e8c4f-96bf-4367-aaf7-263bb3915452,20260121-17-L,"20260114-F09-25
+20260114-F10-26
+20260114-F11-27",825,1.4 ml/g,e12295,180,4,1700,,,,2.03,,,,,,,Internal / External
+18,Isis Botelho Nunes da Silva/Chris Lionetti,20260303,P902 Pellet Lysis Batch Record,,20260303-18-L,"20260211-F10-29
+20260211-F11-30",,1.4 ml/g,e12361,,,4000,0,,,0,,,,,,,none
+19,Chris Lionetti,20260304,P902 Pellet Lysis Batch Record,,20260304-19-L,"20260211-F10-29
+20260211-F11-30",,1.4 ml/g,,,,2000,0,,,0,,,,,,,none
+20,Chris Lionetti,20260306,P902 Pellet Lysis Batch Record,,20260306-L-20,"20251204-F09-22
+20251204-F10-23
+20251204-F11-24",,1.4 ml/g,e12374,260,4,1000,1.96,0.22,,1.99,0.0901,,,,,,
+21,Chris Lionetti,20260316,P902 Pellet Lysis Batch Record,,20260316-L-21,20260306-F11-31,,1.4 mL/g,e12377,260-340,5,3700,,,,,,,,,,,
+22,Chris Lionetti,20260326,P902 Pellet Lysis Batch Record,,20260326-L-22,20260324-F09-32,,1.4 mL/g,e12408,280-340,5,4000,2.45,0.134,,2.4,0.161,,,,,,
+23,Chris Lionetti,20260326,P902 Pellet Lysis Batch Record,,20260326-L-23,20260324-F09-32,,1.4 mL/g,e12409,240-280,5,4000,2.8,0.139,,2.21,0.219,,,,,,

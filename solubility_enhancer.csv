@@ -1,0 +1,34 @@
+num,date_yymmdd,fte,batching_sheet_link,prepared_for,volume_created_ml,paired_lysate_lot,sop_used,lot_number,lot_num__+_description,kglu_mm,mgglu2_mm,type,assumed_expiry,comments
+1,2025-10-29,Kevin Christopher,P902_E91_Master Mix Batching Record,,56.1,20251024-12-L,Batching Sheet,20251029-1-MM-A,20251029-1-MM-A,120,6,,2026-10-29,
+2,2025-10-29,Kevin Christopher,P902_E91_Master Mix Batching Record,,52.8,20251024-12-L,Batching Sheet,20251029-2-MM-B,20251029-2-MM-B,120,6,Brij,2026-10-29,0.1% Brij added accidentally so used for internal MSAT testing and handed over to Datapoints for their tests
+3,2025-10-31,-,-,,-,-,Batching Sheet,20251031-3-MM-A,20251031-3-MM-A,-,-,,2026-10-31,
+4,2025-10-31,Chris Lionetti,P902_E94_Master Mix Batching Record,,59.4,20151024-12-L,Batching Sheet,20251031-4-MM-B,20251031-4-MM-B,120,6,Brij,2026-10-31,
+5,2025-11-03,,P902_E97_Master Mix Batching Record,,,,Batching Sheet,20251103-5-MM-A,20251103-5-MM-A,120,6,,2026-11-03,
+6,2025-11-03,,P902_E97_Master Mix Batching Record,,,,Batching Sheet,20251103-6-MM-B,20251103-6-MM-B,120,6,Brij,2026-11-03,
+7,2025-12-04,Isis Botelho Nunes da Silva,P902_E126_Master Mix Batching Record,,50,20151024-12-L,Batching Sheet,20251204-7-MM-A,20251204-7-MM-A For 12L,120,6,,2026-12-04,
+8,2025-12-04,Isis Botelho Nunes da Silva,P902_E127_Master Mix Batching Record,,20,251106-13-L,Batching Sheet,20251204-8-MM-A,20251204-8-MM-A For 13L,240,4,,2026-12-04,
+9,2025-12-10,Chris Lionetti Rahul Karandikar,P902_E128_Master Mix Batching Record,,66,20251205-14-L,Batching Sheet,20251210-9-MM-A,20251210-9-MM-A For 14L,120,4,none,2026-12-10,
+10,2025-12-10,Chris Lionetti Isis Botelho Nunes da Silva,P902_E128_Master Mix Batching Record,,66,20251205-14-L,Batching Sheet,20251210-10-MM-B,20251210-10-MM-B For 14L,120,4,Brij,2026-12-10,
+11,2025-12-15,Chris Lionetti Isis Botelho Nunes da Silva,P902_E132_Master Mix Batching Record,,120,20251209-15-L,Batching Sheet,20251215-11-MM-A,20251215-11-MM-A for 15-L,180,4,none,2026-12-15,
+12,2025-12-15,Chris Lionetti,P902_E132_Master Mix Batching Record,,120,20251209-15-L,Batching Sheet,20251215-12-MM-B,20251215-12-MM-B for 15-L,180,4,Brij,2026-12-15,
+13,unlucky number 13 not used : (,,,,,,,,,,,,,
+14,2025-12-16,Chris Lionetti,P902_E141_Master Mix Batching Record,,,20251209-15-L,Batching Sheet,20251216-14-MM-B,20251216-14-MM-B For 15L,180,4,Brij,2026-12-16,
+15,2026-01-07,Rahul Karandikar,P902_E147-MM-20260106-Mastermix Revamp Test,MSAT,10,20251219-16-L,Batching Sheet,20260107-15-MM-A,20260107-15-MM-A For 16L,180,4,none,2027-01-07,MC-3 is the associated Mastermix
+16,2026-01-20,Rahul Karandikar,P902_E165-MM-20260120-Prepare Mastermix Concentrate (MMC) for 16-L,Nebula,15,20251219-16-L,Batching Sheet,20260120-16-MM-C,20260120-16-MM-C for 16L,180,4,concentrate,2027-01-20,
+17,2026-01-23,Rahul Karandikar,E166_MM for 17-L internal teams,"Nebula, P412, VHH, MSAT, 100mL External kit",136,20260121-17-L,Batching Sheet,20260123-17-MM-C,20260123-17-MM-C for 17L,180,4,concentrate,2027-01-23,
+18,2026-02-06,Jose Morales Hemuda,P902 E178 Bulk 1777863_77 prep,10mL External kit,80,20260121-17-L,Batching Sheet,20260206-18-MM-D,20260206-18-MM-D for 20260121-17-L,312,12,Economy,2027-02-06,
+19,2026-02-10,Rahul Karandikar,P902_E181-RM-20260210-Preparation of MMC for Ready96 plates,"Ready96, MSAT",60,20251209-15-L,Batching Sheet,20260210-19-MM-C,20260210-19-MM-C for 20251209-15-L,180,4,concentrate,2027-02-10,used up all for CFPS Ready96 kits due to high dead volume and some problematic plates causing wastage
+20,2026-02-20,Rahul Karandikar,P902_E187 Mastermix Batching Record,"Ready96, Nebula, MSAT, Premium Kit",74,20260121-17-L,Batching Sheet,20260220-20-MM-C,20260220-20-MM-C for 20260121-17-L,180,4,concentrate,2027-02-20,
+21,2026-03-02,Rahul Karandikar,P902_E194-MM-20260302-Prepare MMSO (mastermix for salt optimization experiments),MSAT,12,Salt Opt,Batching Sheet,20260302-21-MM-SO,20260302-21-MM-SO for Salt Opt,-,-,SO,2027-03-02,
+22,2026-03-10,Isis Botelho Nunes da Silva,"P902_E200-MM-20260303-Preparation of MMC based on 20L Salt Optima for internal use and MSAT experiments-E188, E193",MSAT,111.38,20260306-20-L,Batching Sheet,20260310-22-MM-C,20260310-22-MM-C for 20260306-20-L,260,4,concentrate,2027-03-10,
+23,2026-03-20,Jose Morales Hemuda,20260317 MM,"Ready96, MSAT",100,20260316-L-21,Batching Sheet,20260320-23-MM-C,20260320-23-MM-C for 20260316-L-21,260,5,concentrate,2027-03-20,
+24,2026-03-20,Isis Botelho Nunes da Silva,P902_E219-MM-20260320-Prepare Master Mix matching shuffle strain lysates,Internal orders,3,20260319-P932_Exp21-SHuffle lysate,Batching Sheet,20260320-24-MM-C,20260320-24-MM-C for 20260319-P932_Exp21-SHuffle lysate,240,4,concentrate,2027-03-20,
+25,2026-03-27,Isis Botelho Nunes da Silva,P902_E226-MM-18991230-Prepare MMC for 22-L and 23-L,"MSAT, 10mL External kit, Internal orders, Premium Kit",200.4357,"20260326-L-22
+20260326-L-23",Batching Sheet,20260327-25-MM-C,"20260327-25-MM-C for 20260326-L-22
+20260326-L-23",280,5,concentrate,2027-03-27,
+26,2026-04-07,Jose Morales Hemuda,P902 E236 SO Salt Optimization of MMD (again),"MSAT, Economy Kit",136,,Batching Sheet,20260407-26-MM-D,20260407-26-MM-D for N/A,,,Economy,2027-04-07,
+27,2026-04-08,Rahul Karandikar,P902_E234-MM-20260408-Prepare Mastermix for Premium kit,"MSAT, Premium Kit",250,"20260326-L-22
+20260326-L-23",Batching Sheet,20260408-27-MM-C,"20260408-27-MM-C for 20260326-L-22
+20260326-L-23",280,5,concentrate,2027-04-08,
+,,,,,,,,,,,,,365,
+,,,,,,,,,,,,,365,

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CFPS Dashboard — Load Data</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Mono','SF Mono',monospace;background:#fff;color:#1e293b;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
+.wrap{text-align:center;max-width:520px;width:100%}
+.da{border:2px dashed #cbd5e1;border-radius:12px;padding:60px 40px;cursor:pointer;transition:border-color .2s,background .2s}
+.da:hover,.da.over{border-color:#2563eb;background:#f8fafc}
+.cb{display:none;margin-top:16px;padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;text-align:center}
+.cb.show{display:block}
+.btn{border:none;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-green{background:#059669;color:#fff}
+.btn-ghost{background:transparent;color:#64748b;border:1px solid #d1d5db;padding:6px 12px;font-size:10px}
+.loading{display:none;margin-top:20px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px}
+.loading.show{display:block}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.nav-back{margin-top:24px}
+.nav-back a{font-size:11px;color:#64748b;text-decoration:none}
+.nav-back a:hover{color:#2563eb}
+.home-btn{
+  position:fixed;top:16px;right:160px;z-index:50;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:10px;
+  background:#fff;border:1px solid #d1d5db;
+  color:#64748b;font-size:11px;font-weight:600;
+  text-decoration:none;font-family:inherit;
+  transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.04);
+}
+.home-btn:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;box-shadow:0 4px 12px rgba(37,99,235,.08)}
+.home-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.db-section{margin-top:20px;border:2px solid #e2e8f0;border-radius:12px;padding:24px;background:#fafbfc;transition:border-color .2s}
+.db-section:hover{border-color:#7c3aed}
+.db-section .db-icon{width:40px;height:40px;border-radius:10px;background:#f3eefb;color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+.db-section .db-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.db-section .db-desc{font-size:11px;color:#64748b;margin-bottom:14px;line-height:1.5}
+.btn-purple{background:#7c3aed;color:#fff}
+.btn-purple:hover{background:#6d28d9}
+.db-status{display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:11px;font-weight:600;text-align:center}
+.db-status.show{display:block}
+.db-status.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.db-status.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.db-status.loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+</head>
+<body>
+<a class="home-btn" href="index.html">
+  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
+  Toolkit home
+</a>
+<div class="wrap">
+  <div class="da" id="da">
+    <div style="font-size:40px;margin-bottom:16px">🔬</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px">CFPS Dashboard</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:20px">Drop a CSV file or click to browse</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fi').click()">Choose CSV</button>
+    <input type="file" id="fi" accept=".csv" style="display:none">
+    <div id="cb" class="cb">
+      <div style="font-size:11px;color:#166534;font-weight:600;margin-bottom:4px">📋 Previously loaded data</div>
+      <div id="cd" style="font-size:10px;color:#15803d;margin-bottom:8px"></div>
+      <button class="btn btn-green" onclick="loadCached()" style="margin-right:6px">Load Cached → Dashboard</button>
+      <button class="btn btn-ghost" onclick="clearCache()">Clear</button>
+    </div>
+  </div>
+  <div id="loading" class="loading">
+    <span class="spinner"></span>
+    <span style="font-size:12px;color:#1e40af;font-weight:600">Parsing CSV & loading dashboard…</span>
+  </div>
+
+  <div class="db-section" id="dbSection">
+    <div class="db-icon">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="10" cy="5" rx="7.5" ry="2.8"/><path d="M2.5 5v4.2c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V5"/><path d="M2.5 9.2v4.2c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V9.2"/></svg>
+    </div>
+    <div class="db-title">Load from database</div>
+    <div class="db-desc">Pull data directly from the <code style="background:#e8e8e4;padding:1px 5px;border-radius:3px;font-size:10px">results</code> table in cfps.db — no file upload needed.</div>
+    <button class="btn btn-purple" onclick="loadFromDB()">Load from DB → Dashboard</button>
+    <div class="db-status" id="dbStatus"></div>
+  </div>
+
+  <div class="nav-back" id="nav-back" style="display:none">
+    <a href="dashboard.html">← Back to Dashboard</a>
+  </div>
+</div>
+
+<script>
+function odb(){return new Promise(function(r,j){var q=indexedDB.open('cfps',1);q.onupgradeneeded=function(){q.result.createObjectStore('c')};q.onsuccess=function(){r(q.result)};q.onerror=function(){j(q.error)}})}
+function saveCSV(csv,fn){return odb().then(function(db){var tx=db.transaction('c','readwrite');tx.objectStore('c').put({csv:csv,fn:fn,ts:Date.now()},'k');return new Promise(function(r){tx.oncomplete=r})}).catch(function(){})}
+function getCSV(){return odb().then(function(db){var tx=db.transaction('c','readonly'),rq=tx.objectStore('c').get('k');return new Promise(function(r){rq.onsuccess=function(){r(rq.result||null)};rq.onerror=function(){r(null)}})}).catch(function(){return null})}
+function delCSV(){return odb().then(function(db){var tx=db.transaction('c','readwrite');tx.objectStore('c').delete('k')}).catch(function(){})}
+
+// Check for cached data
+getCSV().then(function(c){
+  if(c){
+    var age=Date.now()-c.ts,h=Math.floor(age/36e5),m=Math.floor((age%36e5)/6e4);
+    document.getElementById('cd').textContent=c.fn+' — '+(h>0?h+'h '+m+'m ago':m+'m ago');
+    document.getElementById('cb').classList.add('show');
+    document.getElementById('nav-back').style.display='block';
+  }
+});
+
+function loadCached(){
+  document.getElementById('loading').classList.add('show');
+  getCSV().then(function(c){
+    if(c){
+      saveCSV(c.csv,c.fn).then(function(){
+        window.location.href='dashboard.html';
+      });
+    }
+  });
+}
+
+function clearCache(){
+  delCSV();
+  document.getElementById('cb').classList.remove('show');
+  document.getElementById('nav-back').style.display='none';
+}
+
+// Drag & drop
+var da=document.getElementById('da');
+da.addEventListener('dragover',function(e){e.preventDefault();da.classList.add('over')});
+da.addEventListener('dragleave',function(){da.classList.remove('over')});
+da.addEventListener('drop',function(e){e.preventDefault();da.classList.remove('over');var f=e.dataTransfer.files[0];if(f)readF(f)});
+document.getElementById('fi').addEventListener('change',function(e){var f=e.target.files[0];if(f)readF(f)});
+
+function readF(file){
+  document.getElementById('loading').classList.add('show');
+  var r=new FileReader();
+  r.onload=function(e){
+    saveCSV(e.target.result,file.name).then(function(){
+      window.location.href='dashboard.html';
+    });
+  };
+  r.readAsText(file);
+}
+
+// ── LOAD FROM SQLITE DB ──
+function loadFromDB(){
+  var status=document.getElementById('dbStatus');
+  status.className='db-status show loading';
+  status.innerHTML='<span class="spinner"></span> Loading database…';
+
+  initSqlJs({locateFile:function(f){return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/'+f}}).then(function(SQL){
+    return fetch('cfps.db').then(function(resp){
+      if(!resp.ok) throw new Error('cfps.db not found. Run the pipeline first or add CSVs to data/results/.');
+      return resp.arrayBuffer();
+    }).then(function(buf){
+      var db=new SQL.Database(new Uint8Array(buf));
+
+      // Check results table exists
+      var tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='results'");
+      if(!tables.length||!tables[0].values.length){
+        db.close();
+        throw new Error('No "results" table in the database. Push some processed data first.');
+      }
+
+      // Get all rows
+      var result=db.exec("SELECT * FROM results");
+      db.close();
+
+      if(!result.length||!result[0].values.length){
+        throw new Error('The results table is empty.');
+      }
+
+      var cols=result[0].columns;
+      var rows=result[0].values;
+
+      // Build CSV string
+      var csv=cols.join(',')+'\n';
+      for(var i=0;i<rows.length;i++){
+        csv+=rows[i].map(function(v){
+          if(v===null) return '';
+          var s=String(v);
+          if(s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0)
+            return '"'+s.replace(/"/g,'""')+'"';
+          return s;
+        }).join(',')+'\n';
+      }
+
+      status.className='db-status show ok';
+      status.textContent='Loaded '+rows.length+' rows from database. Redirecting…';
+
+      // Save to IndexedDB and redirect
+      saveCSV(csv,'cfps.db → results ('+rows.length+' rows)').then(function(){
+        window.location.href='dashboard.html';
+      });
+    });
+  }).catch(function(err){
+    status.className='db-status show err';
+    status.textContent=err.message;
+  });
+}
+</script>
+</body>
+</html>

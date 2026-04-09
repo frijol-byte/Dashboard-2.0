@@ -1,0 +1,7 @@
+reagent,2025_openai,2025_dp,2025_biofab,2025_other,2026_openai,2026_dp,2026_biofab,2026_other,2026_proj_openai,2026_proj_dp,2026_proj_biofab,2026_proj_other
+Lysate,3.1 L,10 mL,,,660 mL,,,,600 mL,,,10 mL
+Mastermix,20 mL,16 mL,,,,,,,,,,20 mL
+sfGFP,9.6 mL @ 1200 uM,,,.1 mL @ 1750 uM,10 mL @ 1750 uM,,,.1 mL @ 1750 uM,,,,
+Plasmid,,,,,,,,,200 mL @ 50 nM,,,
+MutS,,,190 mL @ 27 mg/mL,,,,,,,,,
+Other,,,,,,,,,,,,Soln: ~5-10 mg of Glycoprotein
